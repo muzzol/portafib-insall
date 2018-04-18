@@ -10,6 +10,9 @@
 # els fitxers de propietats se crean FORA del directori base
 # i no es modifiquen si ja exiteixen.
 #
+# si establim la variable PAUSE a qualsevol valor diferent
+# de 0 (zero), l'script anirà aturant després de cada passa
+#
 # àngel "mussol" bosch - 2018
 #
 
@@ -34,6 +37,17 @@ if [ "$1" == "0" ]; then
 else
     echo "S'ha produït un error"
     exit 1
+fi
+}
+
+# funció de pausa
+if [ "$PAUSE" == "" ]; then
+    PAUSE="0"
+fi
+pause(){
+if [ "$PAUSE" != "0" ]; then
+    echo "Polsa intro per continuar..."
+    read ENJOANPETITQUANBALLABALLABALLABALLA
 fi
 }
 
@@ -63,8 +77,8 @@ USUARI="portafib"
 INSTANCIA="$ENTITAT"
 # nom del servidor. pot esser també una IP, però hauria d'esser
 # el FQDN que se resol públicament
-# SERVIDOR="portafib01"
-SERVIDOR="172.26.67.167"
+SERVIDOR="portafibpre01.test.com"
+# SERVIDOR="172.26.67.167"
 
 ####
 #### PAQUETS
@@ -117,12 +131,13 @@ EOF
 	echo "ERROR: configuració errònia. Revisa el fitxer [$FCONF]"
 	exit 1
     fi
+#    pause
 }
 # f_conf
 
 # comprovacions vàries
 precheck(){
-
+echo "### comprovacions de sistema: "
 if ! id $USUARI > /dev/null ; then
     echo "ERROR: No s'ha trobat l'usuari $USUARI"
     exit 1
@@ -145,11 +160,11 @@ fi
 DEBS="$DEBS libxtst6 libxi6 ant"
 if type -t dpkg > /dev/null ; then
     for d in $DEBS ; do
-	# dpkg -l | grep -q libxtst6
-	dpkg -l | grep '^.i' | grep -q $d
-	if [ "$?" != "0" ]; then
-	    export DEBIAN_FRONTEND=noninteractive
-	    apt-get -q -y install $d
+	echo "DEBUG: comprovant $d"
+	dpkg -l $d > /dev/null 2>&1
+	if [ "$?" == "1" ]; then
+    	    export DEBIAN_FRONTEND=noninteractive
+    	    apt-get -q -y install $d
 	fi
     done
 fi
@@ -165,6 +180,7 @@ if type -t yum > /dev/null ; then
     fi
 fi
 
+pause
 }
 # precheck
 
@@ -235,11 +251,12 @@ chmod +x "${DIR_BASE}/jboss/bin/run.sh"
 # feim propietari a l'usuari especificat
 chown -R "$USUARI" "$DIR_BASE"
 
+pause
 }
 
 instancia(){
 # configurant instància
-echo -n "### configurant instància $INSTANCIA: "
+echo -n "### configurant instància $INSTANCIA [${DIR_BASE}/jboss/server/${INSTANCIA}]: "
 case $INSTANCIA in
     all|default|minimal|standard)
 	echo "OK"
@@ -250,6 +267,7 @@ case $INSTANCIA in
 	chown -R "$USUARI" "${DIR_BASE}/jboss/server/${INSTANCIA}"
     ;;
 esac
+pause
 }
 
 script_inici(){
@@ -260,7 +278,7 @@ if [ -e "$SCRIPT_INICI" ]; then
     exit 0
 fi
 
-echo -n "### creant script d'inici: "
+echo -n "### creant script d'inici [$SCRIPT_INICI]: "
 (
 cat << 'EOF'
 #!/bin/bash
@@ -429,6 +447,7 @@ sed -i "s;^JBOSSUS=.*;JBOSSUS=\"${USUARI}\";" "$SCRIPT_INICI"
 
 chmod 755 "$SCRIPT_INICI"
 echo "OK"
+pause
 }
 # script_inici
 
@@ -481,6 +500,7 @@ ant -q deploy-jboss510
 rm -rf "$DCXFTEMP"
 
 cd "$DIR_BASE"
+pause
 
 }
 
@@ -592,6 +612,7 @@ sed -i 's|<Valve className="org.apache.catalina.authenticator.SingleSignOn" />|-
 echo "OK"
 
 # return 0
+pause
 
 }
 # conf_jboss
@@ -1348,6 +1369,7 @@ fi
 # NO!!! cp  "$REGWEB3_PROPIETATS/"*.properties "${DIR_BASE}/config_sistra/sistra/plugins/"
 
 echo "OK"
+pause
 }
 # conf_properties
 
@@ -1788,6 +1810,7 @@ EOF
 esac
 echo "OK"
 
+pause
 
 }
 # conf_ds
@@ -1848,6 +1871,7 @@ if [ ! -e "$EAR_SISTRACONSOLA" ]; then
 	fi
 fi
 cp -v "$EAR_SISTRACONSOLA" "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/"
+pause
 
 }
 
@@ -1889,6 +1913,8 @@ echo "OK"
 
     # pujam la verbositat del log de seguritat
     sed -i 's|   <!-- Limit the org.apache category|\t<category name="org.jboss.security">\n\t\t<priority value="TRACE"/>\n\t</category>\n\n   <!-- Limit the org.apache category|' "${DIR_BASE}/jboss/server/${INSTANCIA}/conf/log4j.xml" 
+
+pause
 
 }
 

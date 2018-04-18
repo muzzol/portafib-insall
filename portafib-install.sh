@@ -54,7 +54,7 @@ f_conf(){
 ####
 
 # entitat (normalment el nom de l'ajuntament/entitat)
-ENTITAT="imas"
+ENTITAT="ticmallorca"
 # directori arrel de tota la instal·lació
 DIR_BASE="/opt/proves/portafib-$ENTITAT"
 # usuari amb el que s'executarà el servei
@@ -130,9 +130,11 @@ fi
 
 # eines de sistema
 if ! type -t wget > /dev/null ; then
-    echo "ERROR: aquest script necessita wget per funcionar"
-    echo "per favor instal·la wget amb les eines de sistema"
-    exit 1
+    # echo "ERROR: aquest script necessita wget per funcionar"
+    # echo "per favor instal·la wget amb les eines de sistema"
+    # exit 1
+    DEBS="$DEBS wget"
+    RPMS="$RPMS wget"
 fi
 
 
@@ -140,7 +142,7 @@ fi
 # de sistema
 
 # debian/ubuntu
-DEBS="libxtst6 libxi6 ant"
+DEBS="$DEBS libxtst6 libxi6 ant"
 if type -t dpkg > /dev/null ; then
     for d in $DEBS ; do
 	# dpkg -l | grep -q libxtst6
@@ -153,7 +155,7 @@ if type -t dpkg > /dev/null ; then
 fi
 
 # redhat/centos
-RPMS=""
+RPMS="$RPMS ant"
 ## NO ESTÀ PROVAT!!!
 if type -t yum > /dev/null ; then
     # dpkg -l | grep -q libxtst6

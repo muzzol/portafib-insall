@@ -10,10 +10,10 @@
 # els fitxers de propietats se crean FORA del directori base
 # i no es modifiquen si ja exiteixen.
 #
-# àngel "mussol" bosch - 2017
+# àngel "mussol" bosch - 2018
 #
 
-VER="0.1"
+VER="0.2"
 
 # cream un log amb la sortida de tot l'script (dona problemes amb
 # els retorns de carro en cas d'esperar entrada per STDIN)

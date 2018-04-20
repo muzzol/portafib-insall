@@ -81,6 +81,28 @@ SERVIDOR="portafibpre01.test.com"
 # SERVIDOR="172.26.67.167"
 
 ####
+#### PROPIETATS PORTAFIB
+####
+
+# Propietat que indica als projectes que activin les caracteristiques
+# especials requerides en l'entorn de la CAIB (Govern Balear) si val true
+PORTAFIB_ISCAIB="false"
+
+# Dialecte de Hibernate. Pot tenir els valors: 
+# org.hibernate.dialect.PostgreSQLDialect
+# org.hibernate.dialect.MySQLDialect
+# org.hibernate.dialect.DB2Dialect
+# org.hibernate.dialect.SQLServerDialect
+# net.sf.hibernate.dialect.Oracle9Dialect
+# org.hibernate.dialect.Oracle10gDialect
+HIB_DIALECT="org.hibernate.dialect.PostgreSQLDialect"
+
+# es.caib.portafib.hibernate.query.substitutions=true 1, false 0
+
+# Directori on es guardaran tots els fitxers de PortaFIB-->
+PORTAFIB_FILES="/opt/portafibfiles"
+
+####
 #### PAQUETS
 ####
 
@@ -100,8 +122,8 @@ HTTP_PAQUET_JBOSS="https://downloads.sourceforge.net/project/jboss/JBoss/JBoss-5
 # biblioteques extra
 # ORACLE_JAR="${DIR_PAQUETS}/ojdbc14-10.2.0.3.0.jar"	# comentar o deixar en blanc si no se fa servir
 # HTTP_ORACLE_JAR="http://central.maven.org/maven2/com/oracle/ojdbc14/10.2.0.3.0/ojdbc14-10.2.0.3.0.jar" 	# OPCIONAL: URL des d'on baixar el paquet
-POSTRESQL_JAR="${DIR_PAQUETS}/postgresql-9.3-1102-jdbc3.jar"	# comentar o deixar en blanc si no se fa servir
-HTTP_POSTRESQL_JAR="http://central.maven.org/maven2/org/postgresql/postgresql/9.3-1102-jdbc3/postgresql-9.3-1102-jdbc3.jar" # OPCIONAL: URL des d'on baixar el paquet
+POSTGRESQL_JAR="${DIR_PAQUETS}/postgresql-9.3-1102-jdbc3.jar"	# comentar o deixar en blanc si no se fa servir
+HTTP_POSTGRESQL_JAR="http://central.maven.org/maven2/org/postgresql/postgresql/9.3-1102-jdbc3/postgresql-9.3-1102-jdbc3.jar" # OPCIONAL: URL des d'on baixar el paquet
 
 # biblioteca jboss-metadata.jar
 PAQUET_METADATA="${DIR_PAQUETS}/jboss-metadata.jar"
@@ -157,10 +179,10 @@ fi
 # de sistema
 
 # debian/ubuntu
-DEBS="$DEBS libxtst6 libxi6 ant"
+DEBS="$DEBS libxtst6 libxi6 ant unzip"
 if type -t dpkg > /dev/null ; then
     for d in $DEBS ; do
-	echo "DEBUG: comprovant $d"
+	# echo "DEBUG: comprovant $d"
 	# dpkg -s "$d" > /dev/null 2>&1
 	dpkg -l "$d" | grep -q "^ii"
 	if [ "$?" != "0" ]; then
@@ -248,6 +270,7 @@ ln -vs "${DIR_JBOSS}" "jboss"
 # donam execució a run.sh
 chmod +x "${DIR_BASE}/jboss/bin/run.sh"
 
+
 # feim propietari a l'usuari especificat
 chown -R "$USUARI" "$DIR_BASE"
 
@@ -306,7 +329,7 @@ cat << 'EOF'
 # [ #420297 ] JBoss startup/shutdown for RedHat
 
 export DISPLAY=:0.0
-export JAVA_OPTS="-Djava.awt.headless=true -Xms512m -Xmx1024m -XX:MaxPermSize=256m"
+export JAVA_OPTS="-Djava.awt.headless=true -Xoss128m -Xms512m -Xmx1024m -XX:MaxPermSize=256m"
 
 #define where jboss is - this is the directory containing directories log, bin, conf etc
 JBOSS_HOME="/opt/jboss"
@@ -482,6 +505,7 @@ if [ ! -e "$PAQUET_CXF" ]; then
 	    check_err "$?"
 	fi
 fi
+
 # generam un fitxer temporal i descomprimim el cxf
 DCXFTEMP=`mktemp -d`
 cd "$DCXFTEMP"
@@ -500,6 +524,40 @@ ant -q deploy-jboss510
 rm -rf "$DCXFTEMP"
 
 cd "$DIR_BASE"
+
+
+# 2.3.1.- Fitxer JDBC d'accés a BBDD
+
+# ORACLE: si la variable està definida asumim que se vol utilitzar
+if [ "$ORACLE_JAR" != "" ]; then
+    if [ ! -e "$ORACLE_JAR" ]; then
+	if [ "$HTTP_ORACLE_JAR" == "" ]; then
+	    echo "ERROR: No s'ha trobat el paquet [$ORACLE_JAR]"
+	    exit 1
+	else
+	    echo "### baixant el paquet des de [$HTTP_ORACLE_JAR]"
+	    wget --no-check-certificate --no-cookies -nv -O "$ORACLE_JAR" "$HTTP_ORACLE_JAR"
+	    check_err "$?"
+	fi
+    fi
+    cp -vf "$ORACLE_JAR" "${DIR_BASE}/jboss/common/lib/"
+fi
+
+# POSTGRESQL: si la variable està definida asumim que se vol utilitzar
+if [ "$POSTGRESQL_JAR" != "" ]; then
+    if [ ! -e "$POSTGRESQL_JAR" ]; then
+	if [ "$HTTP_POSTGRESQL_JAR" == "" ]; then
+	    echo "ERROR: No s'ha trobat el paquet [$POSTGRESQL_JAR]"
+	    exit 1
+	else
+	    echo "### baixant el paquet des de [$HTTP_POSTGRESQL_JAR]"
+	    wget --no-check-certificate --no-cookies -nv -O "$POSTGRESQL_JAR" "$HTTP_POSTGRESQL_JAR"
+	    check_err "$?"
+	fi
+    fi
+    cp -vf "$POSTGRESQL_JAR" "${DIR_BASE}/jboss/common/lib/"
+fi
+
 pause
 
 }
@@ -508,870 +566,188 @@ pause
 conf_jboss(){
 # configuracions dins del jboss
 
-echo -n "### configurant directori de desplegament: "
-# F_DESPLEGAMENT="${DIR_BASE}/jboss/server/${INSTANCIA}/conf/jboss-service.xml"
-F_DESPLEGAMENT="${DIR_BASE}/jboss/server/${INSTANCIA}/conf/bootstrap/profile.xml"
-# <value>${jboss.server.home.url}deployportafib</value>
-grep deployportafib "$F_DESPLEGAMENT"
-if [ "$?" != "0" ]; then
-    sed -i 's;url}deploy</value>;url}deploy</value>\n\t\t<value>${jboss.server.home.url}deployportafib</value>;' "$F_DESPLEGAMENT"
-    mkdir "${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib"
-fi
-echo "OK"
-
-echo "DEBUG: [$LINEO]" && exit 1
-
-# opcions de java dins el jboss
+# opcions vàries de java dins el jboss
 echo -n "### configurant opcions de java: "
 echo 'export DISPLAY=":0.0"' >> "${DIR_BASE}/jboss/bin/run.conf"
-echo 'JAVA_OPTS="$JAVA_OPTS -Djava.awt.headless=true -Xmx512m -Xoss128m -XX:MaxPermSize=128m"' >> "${DIR_BASE}/jboss/bin/run.conf"
 JAVA_PATH="${DIR_BASE}/java/bin/java"
 echo "JAVA=\"$JAVA_PATH\"" >> "${DIR_BASE}/jboss/bin/run.conf"
 echo "OK"
 
-# Indicar la ubicació dels fitxers de propietats. 
-#F_DS="${DIR_BASE}/jboss/server/${INSTANCIA}/conf/jboss-service.xml"
-F_DS="${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/sistra-properties-service.xml"
-echo -n "### configurant ubicació dels fitxers de propietats: "
-( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<server>
-<mbean code="org.jboss.varia.property.SystemPropertiesService"
-name="jboss:type=Service,name=BootProperties">
-<attribute name="Properties">
-<!-- Dins ${DIR_CONF}/sistra estaran els arxius de configuració -->
-ad.path.properties=${DIR_CONF}
-</attribute>
-</mbean>
-</server>
-
-EOF
-) > "$F_DS"
+echo -n "### configurant directori de desplegament: "
+# F_DESPLEGAMENT="${DIR_BASE}/jboss/server/${INSTANCIA}/conf/jboss-service.xml"
+F_DESPLEGAMENT="${DIR_BASE}/jboss/server/${INSTANCIA}/conf/bootstrap/profile.xml"
+# <value>${jboss.server.home.url}deployportafib</value>
+grep -q deployportafib "$F_DESPLEGAMENT"
+if [ "$?" != "0" ]; then
+    sed -i 's;url}deploy</value>;url}deploy</value>\n\t\t\t\t<value>${jboss.server.home.url}deployportafib</value>;' "$F_DESPLEGAMENT"
+    mkdir "${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib"
+fi
 echo "OK"
 
-# servei de missatges Avisador BTE
-echo -n "### configurant cua de missatges: "
-mkdir -vp "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/sistra.sar/META-INF"
+# 2.2.5.- Permetre consultes sobre múltiples Datasources
+echo -n "### configurant consultes sobre múltiples datasources: "
+F_TSPROP="${DIR_BASE}/jboss/server/${INSTANCIA}/conf/jbossts-properties.xml"
+grep -q com.arjuna.ats.jta.allowMultipleLastResources "$F_TSPROP"
+if [ "$?" != "0" ]; then
+    sed -i 's;arjuna" name="jta">;arjuna" name="jta">\n\t<property name="com.arjuna.ats.jta.allowMultipleLastResources" value="true" />;' "$F_TSPROP"
+fi
+echo "OK"
 
-( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<server>
-   <mbean code="org.jboss.jms.server.destination.QueueService"
-  name="jboss.messaging.destination:service=Queue,name=AvisadorBTE"
-  xmbean-dd="xmdesc/Queue-xmbean.xml">
-    <depends optional-attribute-name="ServerPeer">jboss.messaging:service=ServerPeer</depends>
-    <depends>jboss.messaging:service=PostOffice</depends>
-    <attribute name="JNDIName">queue/AvisadorBTE</attribute>
-    <attribute name="RedeliveryDelay">30000</attribute>
-    <attribute name="MaxDeliveryAttempts">3</attribute>
-   </mbean>
-   <mbean code="org.jboss.varia.property.SystemPropertiesService"
-    name="jboss:type=Service,name=sistraProperties">
-    <attribute name="Properties">
-     <!-- A ${DIR_CONF}/sistra estaran els arxius de configuració -->
-        ad.path.properties=${DIR_CONF}/
-    </attribute>
-   </mbean>
-</server>
+# 2.2.6.- Autenticador WSBASIC
+echo -n "### configurant Autenticador WSBASIC: "
+F_WSBASIC="${DIR_BASE}/jboss/server/${INSTANCIA}/deployers/jbossweb.deployer/META-INF/war-deployers-jboss-beans.xml"
+grep -q '<key>WSBASIC</key>' "$F_WSBASIC"
+if [ "$?" != "0" ]; then
+    sed -i 's;name="authenticators">;name="authenticators">\n\t<entry>\n\t\t<key>WSBASIC</key>\n\t\t<value>org.apache.catalina.authenticator.BasicAuthenticator</value>\n\t</entry>;' "$F_WSBASIC"
 
-EOF
-) >> "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/sistra.sar/META-INF/sistra-service.xml"
+fi
 echo "OK"
 
 
-echo -n "### configurant servei de correu: "
-F_CORREU="${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/mobtratel-mailTest-service.xml"
-( cat << EOF
-<server>
-  <mbean code="org.jboss.mail.MailService"
-      name="jboss:service=MobtratelMailTest">
-     <attribute name="JNDIName">java:/es.caib.mobtratel.mailTest</attribute>
-    <attribute name="User">${SMTP_USUARI}</attribute>
-    <attribute name="Password">${SMTP_PASS}</attribute>
-   <attribute name="Configuration">
-       <configuration>
-            <property name="mail.transport.protocol" value="smtp"/>
-            <property name="mail.smtp.host" value="${SMTP_SERVIDOR}"/>
-            <property name="mail.from" value="${USUARI}@`hostname -f`"/>
-            <property name="mail.debug" value="false"/>
-            <property name="mail.smtp.auth" value="true"/> 
-        </configuration>
-    </attribute>
-  </mbean>
-</server>
-EOF
-) > "$F_CORREU"
-echo "OK"
 
-
-# Modificar el Tomcat per habilitar el single sign on entre les aplicacions.
-# Per això hi ha que descomentar el valve que l'implementa el fitxer $JBOSS/server/default/deploy/jbossweb-tomcat50.sar/server.xml
-echo -n "### configurant SingleSignOn : "
-F_DS="${DIR_BASE}/jboss/server/${INSTANCIA}/deploy/jbossweb.sar/server.xml"
-sed -i 's|<Valve className="org.apache.catalina.authenticator.SingleSignOn" />|-->\n\t\t<Valve className="org.apache.catalina.authenticator.SingleSignOn" />\n\t<!--|g' "$F_DS"
-echo "OK"
-
-# return 0
 pause
-
 }
-# conf_jboss
 
 
 
 conf_properties(){
-# aquestes configuracions estan fora del directori de JBoss
-# i per tant NO les sobre-escrivim si ja existeixen, sempre respectam el que hi hagi
 
-echo "### creant directoris config: "
-mkdir -vp "${DIR_CONF}/sistra/plugins"
+# 2.3.2.- Fitxer de Propietats
+echo "### creant fitxer de propietats: "
 
-if [ -e "${DIR_CONF}/sistra/audita.properties" ]; then
-    echo "### Ja existeix el fitxer de propietats [${DIR_CONF}/sistra/audita.properties]"
-else
-echo "### creant plantilla de propietats de [audita]"
-F_AUDITA="${DIR_CONF}/sistra/audita.properties"
+F_PROPS="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-properties-service.xml"
 ( cat << 'EOF'
-# Path de las imatges generades
-pathImages=/tmp/
+<?xml version="1.0" encoding="UTF-8"?>
+<server>
+  <mbean code="org.jboss.varia.property.SystemPropertiesService" name="jboss:type=Service,name=PortaFIBSystemProperties">
+    <attribute name="Properties">
+      <!-- Propietat que indica als projectes que activin les caracteristiques
+           especials requerides en l'entorn de la CAIB (Govern Balear) si val true ' -->
+      es.caib.portafib.iscaib=$PORTAFIB_ISCAIB
 
-# Datos para el Job del admin.
-scheduler.schedule=true
-scheduler.cron.expression=0 0 1 * * ?
+      # Dialecte de Hibernate
+      es.caib.portafib.hibernate.dialect="$HIB_DIALECT"
+      # es.caib.portafib.hibernate.query.substitutions=true 1, false 0
 
-EOF
-) > "$F_AUDITA"
-fi
+      <!-- Directori on es guardaran tots els fitxers de PortaFIB-->
+      es.caib.portafib.filesdirectory="$PORTAFIB_FILES"
 
-F_BANTEL="${DIR_CONF}/sistra/bantel.properties"
-if [ -e "${F_BANTEL}" ]; then
-    echo "### Ja existeix el fitxer de propietats [${F_BANTEL}]"
-else
-echo "### creant plantilla de propietats de [bantel]"
-( cat << EOF
-# Intervalo de seguridad (minutos) para evitar superposicion de aviso inmediato con aviso periodico
-avisoPeriodico.intervaloSeguridad=2
-# Numero de trabajos
-scheduler.jobs.number=3
-# Nombre Trabajo 1: Planificacion de Job de Aviso a BackOffices
-scheduler.job.1.name=Aviso a BackOffices
-# Clase implementadora
-scheduler.job.1.classname=es.caib.bantel.admin.scheduler.jobs.AvisoBackOfficesJob
-# Expresion cron que determina periodicidad trabajo
-scheduler.job.1.cron.expression=0 * * * * ?
-# Indica si se ejecuta
-scheduler.job.1.schedule=true
-# Nombre trabajo 2: Planificacion de Job de Aviso a Gestores
-scheduler.job.2.name=Aviso a Gestores
-# Clase implementadora
-scheduler.job.2.classname=es.caib.bantel.admin.scheduler.jobs.AvisoGestoresJob
-# Expresion cron que determina periodicidad trabajo (deberia ser despues del proceso de rechazar notifs en zonaper)
-scheduler.job.2.cron.expression=0 0 7 * * ?
-# Indica si se ejecuta
-scheduler.job.2.schedule=true
-# Nombre trabajo 3: Planificacion de Job de Aviso Monitorizacion a Gestores
-scheduler.job.3.name=Aviso monitorizacion a Gestores
-# Clase implementadora
-scheduler.job.3.classname=es.caib.bantel.admin.scheduler.jobs.AvisoMonitorizacionJob
-# Expresion cron que determina periodicidad trabajo
-scheduler.job.3.cron.expression=0 0 * * * ?
-# Indica si se ejecuta
-scheduler.job.3.schedule=true
-# M�ximo n�mero de entradas por aviso
-avisoPeriodico.maxEntradas=100
-#Id cuenta para envio de avisos a gestores
-avisosGestores.cuentaEnvio=TEST
-#Indica si se realiza la llamada al WS de forma asincrona
-webService.cliente.asincrono=true
-# Indica numero de dias tras el cual se marcara como procesada con error un entrada sino se ha conseguido procesar
-# La fecha de comparacion sera la de cuando esta preparada para procesar (al crearse o cuando pasa a estado 'No procesada')
-# Si es 0 no se tiene en cuenta y no caducaran la entradas sin procesarse.
-avisoPeriodico.maxDiasAviso=30
-# Indica si en el modulo de gestion de expedientes se obliga a que los expedientes que se creen a traves de este modulo tengan activados los avisos
-gestionExpedientes.avisosObligatorios=true
+      es.caib.portafib.defaultlanguage=ca
+
+      es.caib.portafib.development=false
+
+      <!-- Clau per encriptar l'identificador del fitxers a descarregar via web(IMPORTANT tamany de 16 caràcters) -->
+      es.caib.portafib.encryptkey=portafibportafib
+
+      <!-- Llistat de Plugins per l'exportació de dades en els llistats (excel, ods, csv, ...) -->
+      es.caib.portafib.exportdataplugins=org.fundaciobit.plugins.exportdata.cvs.CSVPlugin,org.fundaciobit.plugins.exportdata.ods.ODSPlugin,org.fundaciobit.plugins.exportdata.excel.ExcelPlugin
+
+      <!--  Opcional. Indica si s'ha de validar el certificat emprant el Plugin de CheckCertificate
+             quan l'autenticació es realitza emprant ClientCert. Valor per defecte false. -->
+      #es.caib.portafib.checkcertificateinclientcert=true 
 
 
-EOF
-) > "$F_BANTEL"
-fi
+      <!-- ======== PLUGIN DE CONVERSIO DE DOCUMENTS - OPENOFFICE ======= -->
+      es.caib.portafib.documentconverterplugin=org.fundaciobit.plugins.documentconverter.openoffice.OpenOfficeDocumentConverterPlugin
+      es.caib.portafib.plugins.documentconverter.openoffice.host=localhost
+      es.caib.portafib.plugins.documentconverter.openoffice.port=8100
 
-F_FORMS="${DIR_CONF}/sistra/forms.properties"
-if [ -e "${F_FORMS}" ]; then
-    echo "### Ja existeix el fitxer de propietats [${F_FORMS}]"
-else
-echo "### creant plantilla de propietats de [forms]"
-( cat << EOF
-# Tiempo en cache de los dominios sistra
-tiempoEnCache=60
-# Indica si se deben aplicar permisos de acceso sobre la programaci�n de formularios
-habilitar.permisos=false
+      <!-- ======== PLUGIN CHECK CERTIFICATE - FAKE ======= -->
+      es.caib.portafib.certificateplugin=org.fundaciobit.plugins.certificate.fake.FakeCertificatePlugin
+      
+      <!-- ======== PLUGIN CHECK CERTIFICATE - @FIRMA ======= -->
 
+      <!--
+      es.caib.portafib.certificateplugin=org.fundaciobit.plugins.certificate.afirmacxf.AfirmaCxfCertificatePlugin
 
-EOF
-) > "$F_FORMS"
-fi
+      # MODE_VALIDACIO_SIMPLE = 0;
+      # MODE_VALIDACIO_AMB_REVOCACIO = 1;
+      # MODE_VALIDACIO_CADENA = 2;      
+      es.caib.portafib.plugins.certificate.afirma.validationmode=1
+      
+      #es.caib.portafib.plugins.certificate.afirma.endpoint=http://afirma.redsara.es/afirmaws/services/
+      es.caib.portafib.plugins.certificate.afirma.endpoint=http://des-afirma.redsara.es/afirmaws/services/
+      es.caib.portafib.plugins.certificate.afirma.applicationid=
 
-F_GLOBAL="${DIR_CONF}/sistra/global.properties"
-if [ -e "${F_GLOBAL}" ]; then
-    echo "### Ja existeix el fitxer de propietats [${F_GLOBAL}]"
-else
-echo "### creant plantilla de propietats de [global]"
-( cat << EOF
-# -------------- Info organismo ----------------------------------------------
-# Nombre organismo
-organismo.nombre=Ajuntament de Ses Salines
-# Sello registro
-organismo.sello=Ajuntament de Ses Salines
-# Url logo organismo (Url web). Tambi�n ser� utilizada tambi�n en la generaci�n de correos
-organismo.logo=http://www.ajsessalines.net/img/portada/cabecera.png
-# Url logo dins Login (Url web). Solo utilizada en login.jsp de sistra i zonaper
-organismo.logo.login=../images/logoMOCK.gif
-# Url a portal organismo. Ser� la salida por defecto al acabar un tr�mite
-organismo.portal.url=http://www.ajsessalines.net
-# Informaci�n del pie para contacto (permite HTML)
-organismo.footer.contacto=Major, 1 - 07640
-# Url para resolucion de incidencias (se establecera soporte por url o por email, solo uno de ellos). Permite las variables @idioma@, @asunto@ (se reemplazar� por un texto descriptivo)
-organismo.soporteTecnico.url=/sistrafront/protected/init.do?modelo=IN0014CON&version=1&centre=WEB&tipus_escrit=PTD&language=@idioma@&asunto=@asunto@
-# Email para resolucion de incidencias (se establecera soporte por url o por email, solo uno de ellos).
-organismo.soporteTecnico.email=
-# Telefono de resolucion de incidencias (opcional)
-organismo.soporteTecnico.telefono=012
-# Url css para customizacion
-#organismo.cssCustom=http://172.19.0.115:8080/sistrafront/estilos/noexiste.css
-# Url css para customizacion en login.jsp de sistra i zonaper
-organismo.cssLoginCustom=../estilos/loginMOCK.css
-# Zona personal: t�tulo de la zona personal (p.e.: Carpeta de tramitaci�n)
-organismo.zonapersonal.titulo.es=Mi portal
-organismo.zonapersonal.titulo.ca=El meu portal
-organismo.zonapersonal.titulo.en=My web page
-# Zona personal: referencia en frase (por si lleva alg�n art�culo: p.e. "su carpeta de tramitaci�n")
-organismo.zonapersonal.referencia.es=Mi portal
-organismo.zonapersonal.referencia.ca=El meu portal
-organismo.zonapersonal.referencia.en=My web page
-# Textos relativos a la LOPD que se incorporan al paso Debe Saber del asistente de tramitaci�n
-organismo.lopd.aviso.es=Texto LOPD
-organismo.lopd.aviso.ca=Text LOPD
-organismo.lopd.aviso.en=Text LOPD
+      # USERNAME-PASSWORD Token
+      #es.caib.portafib.plugins.certificate.afirma.authorization.username=
+      #es.caib.portafib.plugins.certificate.afirma.authorization.password=
 
-# ------------ Plugins --------------------------------------------------------
-#plugin.registro=es.caib.sistra.plugins.regtel.impl.mock.PluginRegtelMock
+      # CERTIFICATE Token
+      es.caib.portafib.plugins.certificate.afirma.authorization.ks.path=D:/dades/dades/CarpetesPersonals/Programacio/PortaFIB/plugins/plugins-certificate/afirma/proves-dgidt.jks
+      es.caib.portafib.plugins.certificate.afirma.authorization.ks.type=JKS
+      es.caib.portafib.plugins.certificate.afirma.authorization.ks.password=
+      es.caib.portafib.plugins.certificate.afirma.authorization.ks.cert.alias=1
+      es.caib.portafib.plugins.certificate.afirma.authorization.ks.cert.password=
+      -->
+      
+      
+      <!-- ======== PLUGIN USER-INFORMATION - DATABASE ======= -->
+      es.caib.portafib.userinformationplugin=org.fundaciobit.plugins.userinformation.database.DataBaseUserInformationPlugin
+      es.caib.portafib.plugins.userinformation.database.jndi=java:/es.caib.seycon.db.wl
+      es.caib.portafib.plugins.userinformation.database.users_table=SC_WL_USUARI
+      es.caib.portafib.plugins.userinformation.database.username_column=USU_CODI
+      es.caib.portafib.plugins.userinformation.database.administrationid_column=USU_NIF
+      es.caib.portafib.plugins.userinformation.database.name_column=USU_NOM
+      #es.caib.portafib.plugins.userinformation.database.surname_1_column
+      #es.caib.portafib.plugins.userinformation.database.surname_2_column      
+      #es.caib.portafib.plugins.userinformation.database.language_column
+      #es.caib.portafib.plugins.userinformation.database.telephone_column
+      #es.caib.portafib.plugins.userinformation.database.email_column=CONCAT(USU_CODI,'@fundaciobit.org')
+      #es.caib.portafib.plugins.userinformation.database.gender_column
+      #es.caib.portafib.plugins.userinformation.database.password_column
+      es.caib.portafib.plugins.userinformation.database.userroles_table=SC_WL_USUGRU
+      es.caib.portafib.plugins.userinformation.database.userroles_rolename_column=UGR_CODGRU
+      es.caib.portafib.plugins.userinformation.database.userroles_username_column=UGR_CODUSU
+      
+      
+      <!-- ======== PLUGIN USER-INFORMATION - LDAP ======= -->
+      <!--
+      es.caib.portafib.userinformationplugin=org.fundaciobit.plugins.userinformation.ldap.LdapUserInformationPlugin
+      es.caib.portafib.plugins.userinformation.ldap.host_url=ldap://ldap.ibit.org:389
+      es.caib.portafib.plugins.userinformation.ldap.security_principal=[LDAPUSERNAME]
+      es.caib.portafib.plugins.userinformation.ldap.security_authentication=simple
+      es.caib.portafib.plugins.userinformation.ldap.security_credentials=[PASSWORD of LDAPUSERNAME]
+      es.caib.portafib.plugins.userinformation.ldap.users_context_dn=cn=Users,dc=ibitnet,dc=lan
+      es.caib.portafib.plugins.userinformation.ldap.search_scope=onelevel
+      es.caib.portafib.plugins.userinformation.ldap.search_filter=(|(memberOf=CN=@PFI_ADMIN,CN=Users,DC=ibitnet,DC=lan)(memberOf=CN=@PFI_USER,CN=Users,DC=ibitnet,DC=lan))
+      es.caib.portafib.plugins.userinformation.ldap.attribute.username=sAMAccountName
+      es.caib.portafib.plugins.userinformation.ldap.attribute.mail=mail
+      es.caib.portafib.plugins.userinformation.ldap.attribute.administration_id=postOfficeBox
+      es.caib.portafib.plugins.userinformation.ldap.attribute.name=givenName
+      # Has de triar:
+      #       - "surname1" i "surname2"
+      #       - "surname"
+      es.caib.portafib.plugins.userinformation.ldap.attribute.surname=sn
 
-plugin.registro=es.caib.sistra.plugins.regtel.impl.caib.PluginRegweb3
-plugin.envioSMS=es.caib.sistra.plugins.sms.impl.mock.PluginSmsMock
-plugin.envioEmail=es.caib.sistra.plugins.sms.impl.mock.PluginEmailMock
-plugin.pagos=es.caib.sistra.plugins.pagos.impl.mock.PluginPagosMock
-plugin.pagos.OTRO=es.caib.sistra.plugins.pagos.impl.mock.PluginPagosMock
-plugin.firma=es.caib.sistra.plugins.firma.impl.mock.PluginFirmaMock
-plugin.login=es.caib.sistra.plugins.login.impl.mock.PluginLoginMOCK
-plugin.autenticacionExplicita=es.caib.sistra.plugins.login.impl.mock.PluginAutenticacionExplicitaMock
-plugin.custodia=es.caib.sistra.plugins.custodia.impl.mock.PluginCustodiaMock
-plugin.gestionDocumental=es.caib.sistra.plugins.gestorDocumental.impl.mock.PluginGestorDocumentalMock
+      es.caib.portafib.plugins.userinformation.ldap.attribute.surname1=sn1
+      es.caib.portafib.plugins.userinformation.ldap.attribute.surname2=sn2
 
-# ------------ Usuario procesos automaticos ----------------------------------
-auto.user=auto
-auto.pass=auto
+      es.caib.portafib.plugins.userinformation.ldap.attribute.telephone=telephoneNumber
+      es.caib.portafib.plugins.userinformation.ldap.attribute.memberof=memberOf
+      es.caib.portafib.plugins.userinformation.ldap.prefix_role_match_memberof=CN=@
+      es.caib.portafib.plugins.userinformation.ldap.suffix_role_match_memberof=,CN=Users,DC=ibitnet,DC=lan
+      -->
 
-# ----------- Url de sistra --------------------------------------------------
-# Contexto raiz a partir del cual iran el resto de modulos de sistra
-sistra.contextoRaiz.front=/sistrafront
-sistra.contextoRaiz.back=/sistraback
-# Url de los fronts publicos (internet) de sistra (sistrafront, formfront, zonaperfront y redosefront)
-sistra.url=http://${SERVIDOR}:8080
-# Url de los backs internos de sistra (intranet)
-sistra.url.back=http://${SERVIDOR}:8080
+      <!--  Afegir aqui altres propietats -->
 
-# ---------- Entorno: DESARROLLO / PRODUCCION --------------------------------
-entorno=DESARROLLO
-
-# --------- Clave para cifrar usuarios/passwords en BBDD (debe tener 8 caracteres) ---------------------
-clave.cifrado=XXXXX
-
-#-------------  Variable (@backoffice.url@) que puede ser usada para establecer la url de los backoffices (dominios, procesamiento, etc.)  ----------------
-backoffice.url=http://${SERVIDOR}:8080
-
-#-------------  Indica si se ejecuta en un iframe  ---------------------------------------
-sistra.iframe=false
-
-#-------------  Opciones generales avisos  ---------------------------------------
-#  Indica si son obligatorios los avisos para las notificaciones (se debera habilitar avisos por expediente)
-sistra.avisoObligatorioNotificaciones=true
-
-# ------------- Establece opciones de autenticacion a nivel del api de webservices  ---------------------------------------
-# Indica si se usa autenticacion basica basada en cabeceras HTTP (BASIC) o ws-security usernameToken (USERNAMETOKEN)
-sistra.ws.authenticacion=BASIC
-#sistra.ws.authenticacion=USERNAMETOKEN
-# Para autenticacion por usernameToken indica si genera timestamp
-sistra.ws.authenticacion.usernameToken.generateTimestamp=true
-# Indica si realiza log de las llamadas invocadas por sistra
-# (ademas se debera establecer en el log4j: org.apache.cxf a INFO o DEBUG)
-sistra.ws.client.logCalls=true
-# Indica si realiza log de las llamadas servidas por sistra
-# (ademas se debera establecer en el log4j: org.apache.cxf a INFO o DEBUG)
-sistra.ws.server.logCalls=true
-# Indica si no valida el certificado del servidor al que se invoca en comunicacion https
-sistra.ws.client.disableCnCheck=false
-# Indica si deshabilita el modo chunked en las llamadas invocadas por sistra
-sistra.ws.client.disableChunked=false
-
+    </attribute>
+  </mbean>
+</server>
+root@GMPREPORTAFIR:/opt/paquets/portafi
 
 EOF
-) > "$F_GLOBAL"
+
+) > "$F_PROPS"
 fi
 
-F_MOBTRATEL="${DIR_CONF}/sistra/mobtratel.properties"
-if [ -e "${F_MOBTRATEL}" ]; then
-    echo "### Ja existeix el fitxer de propietats [${F_MOBTRATEL}]"
-else
-echo "### creant plantilla de propietats de [mobtratel]"
-( cat << EOF
-# Numero de trabajos automaticos
-scheduler.jobs.number=3
-# Trabajo 1: Realizar envios programados
-scheduler.job.1.name=Realizar Envios Programados
-# Clase implementadora
-scheduler.job.1.classname=es.caib.mobtratel.admin.scheduler.jobs.EnviosJob
-# Expresi�n cron que indica periodicidad trabajo
-scheduler.job.1.cron.expression=0 0 * * * ?
-# Indica si se debe ejecutar el trabajo
-scheduler.job.1.schedule=true
-# Trabajo 2: Realizar envios inmediatos
-scheduler.job.2.name=Realizar Envios Inmediatos
-# Clase implementadora
-scheduler.job.2.classname=es.caib.mobtratel.admin.scheduler.jobs.EnviosInmediatosJob
-# Expresi�n cron que indica periodicidad trabajo
-scheduler.job.2.cron.expression=0 * * * * ?
-# Indica si se debe ejecutar el trabajo
-scheduler.job.2.schedule=true
-# Trabajo 3: Realizar verificacion envios
-scheduler.job.3.name=Realizar verificacion envios
-# Clase implementadora
-scheduler.job.3.classname=es.caib.mobtratel.admin.scheduler.jobs.VerificarEnviosJob
-# Expresi�n cron que indica periodicidad trabajo
-scheduler.job.3.cron.expression=0 0 * * * ?
-# Indica si se debe ejecutar el trabajo
-scheduler.job.3.schedule=false
-# Limite de tiempo (min) que puede durar el proceso de envio
-envio.limiteTiempo=45
-# Maximo de errores en envios SMS antes de cancelar envio (0 no cancela)
-sms.maxErroresSMS=2
-# Maximo numero de caracteres en mensaje SMS
-sms.maxCaracteres=160
-# Envio paginado de emails (divididos en n paginas segun numero de destinatarios)
-email.pagina=100
-# Numero maximo de destinatarios permitidos (0 no hay limite)
-sms.maxDestinatarios=1000
-# Numero maximo de destinatarios permitidos (0 no hay limite)
-email.maxDestinatarios=0
-# Delay (segs) entre un sms y el siguiente
-sms.delay=0
-# Indica si se deben simular los envios email
-envio.simularEnvioEmail=true
-# Indica si se deben simular los envios sms
-envio.simularEnvioSms=true
-# En caso de que se simulen los envios indica la duracion que simula tarda un envio (segs)
-envio.simularEnvio.duracion=10
-# Indica el limite de dias de intento de envio para env�os sin fecha caducidad (sino se establece, por defecto 15)
-envio.limite.sin.fecha.caducidad=10
-# Indica el limite de dias para intentar verificar el envio (sino se establece, por defecto 5)
-envio.verificarEnvio.limite=5
-# Indica sufijo que tendra el titulo del mensaje email para que se pueda verificar a posteri si se ha enviado. El ? se sustituira por el id del mensaje.
-envio.verificarEnvio.sufijoEmail=(Codi: ?)
-
-EOF
-) > "$F_MOBTRATEL"
-fi
-
-F_REDOSE="${DIR_CONF}/sistra/redose.properties"
-if [ -e "${F_REDOSE}" ]; then
-    echo "### Ja existeix el fitxer de propietats [${F_REDOSE}]"
-else
-echo "### creant plantilla de propietats de [redose]"
-
-( cat << EOF
-# Texto asociado al barcode verificador
-verifier.text=Adre�a per a la comprovaci� de la validesa del document
-
-# Conexion con el open office 3.1 para la conversion de documentos a pdf
-openoffice.host=${SERVIDOR}
-openoffice.port=8100
-
-# Root path para plugin de almacenamiento en fichero
-# Los documentos se almacenar�n en este path con la  siguiente estructura de directorios:
-# <RootPath>/modelo/version/a�o/mes/fichero
-plugin.filesystem.rootPath=/temp/rds-data
-
-# Habilitar proceso automatico consolidacion gestor documental
-scheduler.jobConsolidacionGestorDocumental.schedule=true
-# Cron que indica cuando se ejecuta proceso automatico
-scheduler.jobConsolidacionGestorDocumental.cron.expression=0 0/10 * * * ?
-# Limite documentos a consolidar en cada intervalo
-scheduler.jobConsolidacionGestorDocumental.limite=1000
-
-# Habilitar proceso automatico de purgado documentos
-scheduler.jobPurgadoDocumentos.schedule=true
-# Cron que indica cuando se ejecuta proceso automatico
-scheduler.jobPurgadoDocumentos.cron.expression=0 0 5 * * ?
-#Indica los meses que estara un documento marcado para borrar antes de borrarse definitivamente
-scheduler.jobPurgadoDocumentos.mesesAntesBorradoDefinitivo=12
-# Indica numero de documentos maximo a purgar en cada proceso
-# (se aplica el limite cada vez en cada caso: docs sin usos, docs eliminar definitivamente, docs custodia y docs externos)
-scheduler.jobPurgadoDocumentos.limite=5000
-
-# Indica si se establece barcode en la url de verificacion
-urlVerificacion.barcode.mostrar=true
-
-# Indica si se usa CSV (en lugar del localizador)
-urlVerificacion.csv=false
-
-
-EOF
-) > "$F_REDOSE"
-fi
-
-F_REGTEL="${DIR_CONF}/sistra/regtel.properties"
-if [ -e "${F_REGTEL}" ]; then
-    echo "### Ja existeix el fitxer de propietats [${F_REGTEL}]"
-else
-echo "### creant plantilla de propietats de [regtel]"
-
-( cat << EOF
-# Indica si el registro debe firmar el justificante para un registro de entrada
-#firmar.entrada=true
-firmar.entrada=false
-
-# Indica si el registro debe firmar el justificante para un registro de salida
-#firmar.salida=true
-firmar.salida=false
-
-# Certificado de registro (el pin solo sera necesario para firma caib)
-certificado.name=TEST: Usuario Prueba Prueba
-certificado.pin=12341234 
-
-
-EOF
-) > "$F_REGTEL"
-fi
-
-F_SARCONFIG="${DIR_CONF}/sistra/sar-config.properties"
-if [ -e "${F_SARCONFIG}" ]; then
-    echo "### Ja existeix el fitxer de propietats [${F_SARCONFIG}]"
-else
-echo "### creant plantilla de propietats de [sar-config]"
-
-( cat << EOF
-# Indica si las propiedades van por SAR
-es.caib.sistra.configuracion.sistra.sar=false
-
-EOF
-) > "$F_SARCONFIG"
-fi
-
-F_SISTRA="${DIR_CONF}/sistra/sistra.properties"
-if [ -e "${F_SISTRA}" ]; then
-    echo "### Ja existeix el fitxer de propietats [$F_SISTRA]"
-else
-echo "### creant plantilla de propietats de [sistra]"
-
-( cat << EOF
-# Indica si se resetea sesion web al iniciar (forzar sso caib)
-front.resetearSesionInicio=false
-# Indica si se deben aplicar permisos de acceso sobre la programaci�n de tramites
-habilitar.permisos=false
-
-EOF
-) > "$F_SISTRA"
-fi
-
-F_ZONAPER="${DIR_CONF}/sistra/zonaper.properties"
-if [ -e "$F_ZONAPER" ]; then
-    echo "### Ja existeix el fitxer de propietats [$F_ZONAPER]"
-else
-echo "### creant plantilla de propietats de [zonaper]"
-( cat << EOF
-# Indica si se resetea sesion web al iniciar (forzar sso caib)
-front.resetearSesionInicio=false
-
-# Permite enlazar zonaperback con la aplicacion de registro (link inicio zonaperback apuntaria a esta url). Sino se establece se redirige a la pagina de inicio de zonaperback
-#back.urlAplicacionRegistro=https://intranet.caib.es/regweb/index.jsp
-
-#Id cuenta para envio de avisos expediente (eventos expediente y avisos notificacion)
-avisos.cuentaEnvio.avisosExpediente=TEST
-#Id cuenta para envio de avisos delegacion (zona personal delegada)
-avisos.cuentaEnvio.delegacion=TEST
-
-# Indica si se realizara la confirmacion de envio para las notificaciones
-avisos.confirmacionEnvio.notificaciones.email=false
-avisos.confirmacionEnvio.notificaciones.sms=false
-# Indica si se realizara la confirmacion de envio para los eventos de expediente
-avisos.confirmacionEnvio.eventosExpediente.email=false
-avisos.confirmacionEnvio.eventosExpediente.sms=false
-# Indica si se permite generar sms para alertas sobre expedientes (si se deshabilitan los sms solo se generaran a nivel de avisos especificos de expediente)
-avisos.smsAlertas=false
-# Indica si esta habilitado el apartado de alertas en la zona personal
-avisos.apartadoAlertas=true
-
-#Indica si el proceso automatico de borrado de tramites caducados (persistencia y preregistro sin confirmacion) esta activado
-scheduler.backup.schedule=true
-
-#Expresion para indicar cuando se ejecuta el proceso automatico
-scheduler.backup.cron.expression=0 0 4 * * ?
-
-#Indica si en el proceso de borrado de tramites caducados se borran los tramites de preregistro que tras finalizar su fecha limite de entrega no estan confirmados
-scheduler.backup.schedule.borradoPreregistro=false
-
-#Indica los meses que estara un tramite antes de considerarse caducado si no estan confirmados
-scheduler.backup.borradoPreregistro.meses=12
-
-#Indica numero maximo de elementos a tratar
-scheduler.backup.maxElementos=5000
-
-#Expresion para indicar cuando se ejecuta el proceso automatico de revisar registros
-scheduler.revisarRegistrosEfectuados.cron.expression=0 0 * * * ?
-
-#Indica si en el proceso de revisar registro
-scheduler.revisarRegistrosEfectuados.schedule=true
-
-#Indica si en el proceso de borrar los tramites de la tabla de backup de tramites
-scheduler.borradoBackup.schedule=true
-
-#Expresion para indicar cuando se ejecuta el proceso automatico
-scheduler.borradoBackup.cron.expression=0 0 4 * * ?
-
-#Indica los meses que estara un tramite en la tabla de backup de tramites
-scheduler.borradoBackup.meses=12
-
-#Indica numero maximo de elementos a tratar
-scheduler.borradoBackup.maxElementos=5000
-
-#Indica si se deben firmar las delegaciones de representante por parte del funcionario
-delega.firmarDelegacionRepresentante=true
-
-# Control entrega notificacion que requiere firma de acuse (requiere especificacion dias festivos)
-notificaciones.controlEntrega.habilitar=false
-
-
-# Dias festivos: buscara en el directorio indicado un fichero anyo.properties (p.e. 2012.properties)
-#  El fichero tendra el siguiente formato: una linea por mes y para cada mes los dias festivos separados por coma
-#  mes.1=1,6
-#  mes.2=
-#  ...
-#  mes.12=6,8,24,25,31
-# No hace falta especificar los domingos como d�a inh�bil, ya que se detectar� autom�ticamente.
-# IMPORTANTE: EL CALCULO DEL FIN DE PLAZO DE LA NOTIFICACION SE REALIZA EN EL MOMENTO DE REALIZAR LA NOTIFICACION, ASI QUE
-#	EL FICHERO DE FESTIVOS DEL A�O SIGUIENTE DEBE ESTAR PREPARADO EN DICIEMBRE
-notificaciones.calendarioDiasFestivos=/app//caib/sistra/plugins/calendario
-
-# Indica si los acuses de recibo firmados con clave de acceso se sellan digitalmente en servidor con una firma de certificado de aplicacion
-notificaciones.sellarAcuses.firmaClave.habilitar=false
-notificaciones.sellarAcuses.certificado.name=TEST: Usuario Prueba Prueba
-notificaciones.sellarAcuses.certificado.pin=12341234
-
-#Indica si el proceso automatico de control de entrega de notificaciones esta activado
-scheduler.entregaNotificaciones.schedule=false
-
-#Expresion para indicar cuando se ejecuta el proceso automatico
-scheduler.entregaNotificaciones.cron.expression=0 0 4 * * ?
-
-#Indica si el proceso automatico de alertas de tramitacion esta activado. Las alertas de tramitaci�n son alertas sobre incidencias detectadas antes del registro definitivo de la solicitud (incluye fase de preregistro hasta que se confirma).
-scheduler.alertasTramitacion.schedule=true
-
-#Expresion para indicar cuando se ejecuta el proceso automatico
-scheduler.alertasTramitacion.cron.expression=0 0 * * * ?
-
-#Indica cuando se alerta de que hay un pago telematico finalizado y no se ha finalizado el tr�mite (horas). Si es igual a 0, no se generara alerta.
-scheduler.alertasTramitacion.pagoFinalizado.avisoInicial=1
-
-#Indica cada cuanto se repite el aviso de que hay un pago telematico finalizado y no se ha finalizado el tr�mite (horas). Si intervalo repeticion es menor o igual a 0, no generamos alertas repeticion.
-scheduler.alertasTramitacion.pagoFinalizado.repeticion=48
-
-#Indica cuando se alerta de que hay un pago telematico finalizado y no se ha finalizado el tr�mite, si se avisa a los gestores por mail.
-scheduler.alertasTramitacion.pagoFinalizado.avisarGestores=false
-
-#Indica cuando se empieza a alertar de que hay un preregistro pendiente de entregar una vez preregistrado (horas). Si es igual a 0, no se generara alerta.
-scheduler.alertasTramitacion.preregistroPendiente.avisoInicial=24
-
-#Indica cada cuanto se repite el aviso de que hay un preregistro pendiente (horas). Si intervalo repeticion es menor o igual a 0, no generamos alertas repeticion.
-scheduler.alertasTramitacion.preregistroPendiente.repeticion=48
-
-#Prefijo alta automatica de usuarios (se a�adir� el nif a este prefijo)
-usuario.prefijoAuto=TMP-
-
-EOF
-) > "$F_ZONAPER"
-fi
-
-# plugins
-## PENDENT CONSULTA SOBRE PLUGIN REGWEB3!!!
-
-
-F_PCUSTODIA="${DIR_CONF}/sistra/plugins/plugin-custodia.properties"
-if [ -e "$F_PCUSTODIA" ]; then
-    echo "### Ja existeix el fitxer de propietats [$F_PCUSTODIA]"
-else
-echo "### creant plantilla de propietats de [plugin-custodia]"
-
-( cat << EOF
-# Identificacion aplicacion sistra en custodia
-ClienteCustodia=CustodiaSistra
-
-# Url consulta custodia (PRO)
-#urlConsultaCustodia=http://vd.caib.es/
-
-# Url consulta custodia (PRE)
-urlConsultaCustodia=https://proves.caib.es/signatura/sigpub/
-
-# Mapeo de modelos RDS a modelos custodia
-# -- Habra que ir a�adiendo el mapeo de los documentos conforme haga falta (modeloRDS=modeloCustodia).
-# -- Para GE0001JUSTIF y GE0002ASIENTO hay un tratamiento especial, ya que se detecta el tipo del
-# -- asiento: si son de entrada, acuse, etc.
-GE0001JUSTIF_ENTRADA=SISTRA_JUSTIFICANT_ENTRADA
-GE0002ASIENTO_ENTRADA=SISTRA_REGISTRE_ENTRADA
-GE0002ASIENTO_ACUSE=SISTRA_REBUT_NOTIFICACIO
-GE0005ANEXGEN=SISTRA_ANNEX_GENERIC
-GE0011NOTIFICA=SISTRA_NOTIFICACIO
-GE0012DELEGA=SISTRA_DELEGACIO
-
-EOF
-) > "$F_PCUSTODIA"
-fi
-
-
-F_PFIRMA="${DIR_CONF}/sistra/plugins/plugin-firma.properties"
-if [ -e "$F_PFIRMA" ]; then
-    echo "### Ja existeix el fitxer de propietats [$F_PFIRMA]"
-else
-echo "### creant plantilla de propietats de [plugin-firma]"
-
-( cat << EOF
-# Content types de firma utilizados
-contentType.registroEntrada=application/caib-resgitreentrada
-contentType.acuseNotificacion=application/caib-acusenotificacio
-# CAI 578090
-#contentType.justificanteEntrada=application/x-caib-rebutregistre
-#contentType.justificanteSalida=application/x-caib-rebutregistre
-contentType.justificanteEntrada=application/signaturaTest
-contentType.justificanteSalida=application/signaturaTestNR
-
-contentType.documentoNotificacion=application/signaturaTestNR
-
-EOF
-) > "$F_PFIRMA"
-fi
-
-F_PLOGIN="${DIR_CONF}/sistra/plugins/plugin-login.properties"
-if [ -e "$F_PLOGIN" ]; then
-    echo "### Ja existeix el fitxer de propietats [$F_PLOGIN]"
-else
-echo "### creant plantilla de propietats de [plugin-login]"
-
-( cat << EOF
-# Nombre de la cookie de autenticacion (despues de "/" viene si es preproducci�n o producci�n )
-#auth.cookiename=es.caib.loginModule/
-auth.cookiename=es.caib.loginModule/Desarrollo
-
-#DOMINIO.EC_GBPAIS.user=caibenred
-#DOMINIO.EC_GBPAIS.pass=indra032012
-
-# Usuario/Password a usar en la autenticaci�n explicita. Parametrizado por procedimiento/iddominio.
-# Si no se especifica usuario / password se usara el de los procesos automaticos.
-
-# Se puede especificar para cada elemento el usr/pwd.
-# PROCEDIMIENTO.IDPROCEDIMIENTO.user=usuario 
-# PROCEDIMIENTO.IDPROCEDIMIENTO.pass=password 
-# DOMINIO.IDDOMINIO.user=usuario
-# DOMINIO.IDDOMINIO.pass=password
-
-# Se puede agrupar la informacion de login
-LOGIN.LOGIN1.user=test
-LOGIN.LOGIN1.pass=test
-PROCEDIMIENTO.TS0007INTE.login=LOGIN1
-DOMINIO.TS_PROVIN.login=LOGIN1
-DOMINIO.TS_MUNICI.login=LOGIN1
-DOMINIO.TS_DOMINIS.login=LOGIN1
-
-EOF
-) > "$F_PLOGIN"
-fi
-
-F_PPAGOS="${DIR_CONF}/sistra/plugins/plugin-pagos.properties"
-if [ -e "$F_PPAGOS" ]; then
-    echo "### Ja existeix el fitxer de propietats [$F_PPAGOS]"
-else
-echo "### creant plantilla de propietats de [plugin-pagos]"
-
-( cat << EOF
-# Indica si la confirmaci�n de un pago tiene que ser simulada o real.
-pago.simular=true
-
-pago.entidad.BM=true
-pago.entidad.LC=true
-pago.entidad.SN=true
-pago.entidad.BB=true
-
-# Fase (pruebas / produccion)
-fase=produccion
-
-
-# URLs pruebas
-#url.pruebas=http://www.tributsCaib.com/services
-
-# URLs produccion
-url.produccion=http://www.atib.es/servicios/service_tasa.asmx
-
-# valores para SOAPHeader
-usuarioWs=indrauser
-passwordWs=INDRA
-
-EOF
-) > "$F_PPAGOS"
-fi
-
-# sensible a capitalització?
-F_PPAGOSTPV="${DIR_CONF}/sistra/plugins/plugin-pagosTPV.properties"
-if [ -e "$F_PPAGOSTPV" ]; then
-    echo "### Ja existeix el fitxer de propietats [$F_PPAGOSTPV]"
-else
-echo "### creant plantilla de propietats de [plugin-pagostpv]"
-
-( cat << EOF
-# URLs intercambio informacion y redireccion
-tpv.urlAsistenteInicio=http://${SERVIDOR}:28080/pagosTPVFront/init.do?token=
-tpv.urlTPV=https://sis-t.redsys.es:25443/sis/realizarPago
-tpv.urlRetornoOK=http://${SERVIDOR}:28080/pagosTPVFront/retornoTPV.jsp
-tpv.urlRetornoKO=http://${SERVIDOR}:28080/pagosTPVFront/retornoTPV.jsp
-tpv.urlNotificacion=http://caibter.indra.es/NotificadorTPV/provescaib
-
-# Modelo RDS de documento de pago presencial
-tpv.documentoPagoPresencial.modelo=GE0006PAGO
-tpv.documentoPagoPresencial.version=1
-tpv.documentoPagoPresencial.plantilla=PRE
-
-# Prefijo orden (PARA ENTORNOS DE TEST) 
-# Por si hay distintos entornos de test usando el TPV se establece un prefijo
-# para evitar duplicidades en numeros de pedido.
-# Un prefijo distinto por entorno.
-# Para produccion, debe estar vacio
-tpv.orderPrefix=A
-
-# Moneda: euros
-tpv.merchantCurrency=978
-
-# Transaccion: pago online
-tpv.merchantTransactionTypeAut=0
-
-# Idiomas
-tpv.idioma.es=001
-tpv.idioma.ca=003
-tpv.idioma.en=002
-
-# Alta de organismos que pueden usar el TPV. 
-# Se identificaran por el id organismo: tpv.idorganismo.propiedad )
-tpv.ieb.merchantName=INSTITUT ESTUDIS BALEARIC
-tpv.ieb.merchantCode=329058705
-tpv.ieb.merchantTerminal=1
-tpv.ieb.merchantPassword=sq7HjrUOBfKmC576ILgskD5srU870gJ7
-tpv.ieb.documentoPagoPresencial.entidad1.nombre=Sa Nostra
-tpv.ieb.documentoPagoPresencial.entidad1.cuenta=2051 0005 45 1035505293
-tpv.ieb.documentoPagoPresencial.entidad2.nombre=La Caixa
-tpv.ieb.documentoPagoPresencial.entidad2.cuenta=2100 2715 55 0200036911
-tpv.ieb.documentoPagoPresencial.entidad3.nombre=Banca March
-tpv.ieb.documentoPagoPresencial.entidad3.cuenta=0061 0003 80 0166750113
-tpv.ieb.documentoPagoPresencial.instrucciones.es=Obligaciones legales en materia de protecci�n de datos de car�cter personal (Ley org�nica 15/1999, de 13 de diciembre, de protecci�n de car�cter personal). Sus datos personales se trataran y se incorporaran en un fichero escrito en la Agencia Espa�ola de Protecci�n de Datos, del cual es responsable l'Institut d'Estudis Bal�arics (IEB), para tramitar su solicitud y llevar a cabo la gesti�n administrativa y econ�mica de las acciones formativas organizadas por el IEB. Puede ejercer el derecho de acceso, rectificaci�n, cancelaci�n y oposici�n mediante un escrito, acompa�ado de una copia del DNI dirigido al IEB(calle Alfons el Magn�nim, n�m 29., 1�, puerta 4: 07004 Palma, Mallorca, Illes Balears).
-tpv.ieb.documentoPagoPresencial.instrucciones.ca=Obligacions legals en m�teria de protecci� de dades de car�cter personal (Llei org�nica 15/1999, de 13 de desembre, de protecci� de dades de car�cter personal). Les vostres dades personals es tractaran i s'incorporaran en un fitxer escrit a l'Ag�ncia Espanyola de Protecci� de Dades, del qual �s responsable l'Institut d'Estudis Bale�rics (IEB), per tramitar la vostra sol�licitud i dur a terme la gesti� administrativa i econ�mica de les accions formatives organitzades per l'IEB. Podeu exercir els drets d'acc�s, rectificaci�, cancel�laci� i oposici� mitjan�ant un escrit, acompanyat d'una c�pia del DNI dirigit a l'IEB (carres Alfons el Magn�nim, n�m 29., 1�, porta 4: 07004 Palma, Mallorca, Illes Balears).
-tpv.ieb.documentoPagoPresencial.instrucciones.en=Lo mismo que antes, pero en ingles
-
-tpv.ibavi.merchantName=IBAVI
-tpv.ibavi.merchantCode=333390318
-tpv.ibavi.merchantTerminal=1
-tpv.ibavi.merchantPassword=qwertyasdf0123456789
-
-
-EOF
-) > "$F_PPAGOSTPV"
-fi
-
-F_PREGTEL="${DIR_CONF}/sistra/plugins/plugin-regtel.properties"
-if [ -e "$F_PREGTEL" ]; then
-    echo "### Ja existeix el fitxer de propietats [$F_PREGTEL]"
-else
-echo "### creant plantilla de propietats de [plugin-regtel]"
-
-( cat << EOF
-# Indica si hace log de las peticiones
-plugin.regweb.print.peticio=false
-
-# Propiedades del AS/400
-as400=sirio
-biblioteca=objreg
-programaVPO=rwbvpo00
-programaCSS=rwbcss00 
-
-# Implementaci�n acceso a registro regweb
-registroDAOImpl=es.caib.regtel.plugincaib.persistence.dao.registro.impl.RegistroDAOImpl
-parametrosDAOImpl=es.caib.regtel.plugincaib.persistence.dao.parametros.ParametrosDAOImpl
- 
-# Codigos de idioma
-plugin.regweb.idioma.es=1
-plugin.regweb.idioma.ca=2
-plugin.regweb.idioma.default=X
-
-# Validacion de la oficina del usuario
-validaOfRegEnt=false
-validaOfRegSal=false
- 
-# Usuario de conexion a registro
-# Si auto=true usa el usuario auto definido en sistra (global.properties)
-# Si auto=false usa el usuario / password indicado
-plugin.regweb.auth.auto=false
-plugin.regweb.auth.username=$$bantel$$
-plugin.regweb.auth.password=bantel
-
-# Indica modo EJB / WS
-plugin.regweb.modo=WS
-#plugin.regweb.modo=EJB
- 
-# Url a Regweb EJB
-#plugin.regweb.url=https://proves.caib.es/invoker-regweb/ReadOnlyJNDIFactory
-# Url a Regweb WS
-plugin.regweb.url=https://proves.caib.es/regweb2/WS/services/RegwebFacade?wsdl
-
-# Oficina unica telematica de registro. Si esta alimentada se devolvera esta y si esta vacia se devolveran todas.
-# - Codigo: codOficina.codOficinaFisica
-plugin.regweb.oficinaTelematicaUnica.codigo=99.0
-# - Descripcion: desOficina.desOficinaFisica
-plugin.regweb.oficinaTelematicaUnica.descripcion=PRINCIPAL.Registre Telematic
-
-EOF
-) > "$F_PREGTEL"
-fi
-
-F_PSMS="${DIR_CONF}/sistra/plugins/plugin-sms.properties"
-if [ -e "$F_PSMS" ]; then
-    echo "### Ja existeix el fitxer de propietats [$F_PSMS]"
-else
-echo "### creant plantilla de propietats de [plugin-sms]"
-
-( cat << EOF
-# Url de provato 
-sms.url=http://XXXXXXXXX:18080/provato/soap
-# Numero movil remitente
-sms.remitent=XXXXXXXXX
-# Usuario provato
-sms.username=XXXXXXXXX
-# Pass provato
-sms.password=XXXXXXXXX
-
-EOF
-) > "$F_PSMS"
-fi
-
-
-# NO!!! cp  "$REGWEB3_PROPIETATS/"*.properties "${DIR_BASE}/config_sistra/sistra/plugins/"
 
 echo "OK"
+
+echo "DEBUG: [$LINENO]" && exit 1
+
 pause
 }
-# conf_properties
 
 
 
@@ -1956,7 +1332,7 @@ for i in "$@"; do
 	    instancia
 	    script_inici
 	    lib_extras
-	    lib_caib
+	    # lib_caib
 	    conf_jboss
 	    conf_properties
 	    conf_ds
@@ -1987,6 +1363,8 @@ for i in "$@"; do
 	    lib_extras
 	;;
 	-c)
+	    # a portafib no se fa servir
+	    exit 1
 	    f_conf
 	    precheck
 	    lib_caib

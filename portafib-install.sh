@@ -161,8 +161,9 @@ DEBS="$DEBS libxtst6 libxi6 ant"
 if type -t dpkg > /dev/null ; then
     for d in $DEBS ; do
 	echo "DEBUG: comprovant $d"
-	dpkg -l $d > /dev/null 2>&1
-	if [ "$?" == "1" ]; then
+	# dpkg -s "$d" > /dev/null 2>&1
+	dpkg -l "$d" | grep -q "^ii"
+	if [ "$?" != "0" ]; then
     	    export DEBIAN_FRONTEND=noninteractive
     	    apt-get -q -y install $d
 	fi
@@ -173,7 +174,6 @@ fi
 RPMS="$RPMS ant"
 ## NO ESTÀ PROVAT!!!
 if type -t yum > /dev/null ; then
-    # dpkg -l | grep -q libxtst6
     rpm -qa | grep -q libxtst6
     if [ "$?" != "0" ]; then
 	yum install libXext.i686

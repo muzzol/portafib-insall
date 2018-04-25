@@ -70,7 +70,7 @@ f_conf(){
 # entitat (normalment el nom de l'ajuntament/entitat)
 ENTITAT="ticmallorca"
 # directori arrel de tota la instal·lació
-DIR_BASE="/opt/proves/portafib-$ENTITAT"
+DIR_BASE="/opt/portafib-$ENTITAT"
 # usuari amb el que s'executarà el servei
 USUARI="portafib"
 # nom de la instància
@@ -101,6 +101,32 @@ HIB_DIALECT="org.hibernate.dialect.PostgreSQLDialect"
 
 # Directori on es guardaran tots els fitxers de PortaFIB-->
 PORTAFIB_FILES="/opt/portafibfiles"
+
+# Clau per encriptar l'identificador del fitxers a descarregar via web (IMPORTANT tamany de 16 caràcters)
+PORTAFIB_ENCRYPTKEY="abcdefgh12345678"
+
+# plugin d'informació de l'usuari (es.caib.portafib.userinformationplugin). pot ser
+# pot ser: bbdd, ldap
+PORTAFIB_PLUGIN_INFOUSER="ldap"
+
+# BBDD per la informació de l'usuari (s'ignoren aquestes dades en cas
+# d'utilitzar un altre plugin a la variable PORTAFIB_INFOUSER)
+
+
+# LDAP per la informació del l'usuari (s'ignoren aquestes dades en cas
+# d'utilitzar un altre plugin a la variable PORTAFIB_INFOUSER)
+PLUGIN_USERINFOLDAP_HOST="ldap://ldap.ticmallorca.net:389"
+PLUGIN_USERINFOLDAP_PRINCIPAL="u99999"
+PLUGIN_USERINFOLDAP_CREDENTIALS="SuPerPa44"
+PLUGIN_USERINFOLDAP_USERSDN="ou=users,dc=consorci,dc=global"
+PLUGIN_USERINFOLDAP_FILTER="(|(memberof=cn=rol-app3,ou=rols,ou=groups,dc=consorci,dc=global)(memberof=cn=RSC_OPER,ou=rolsac,ou=rols,ou=groups,dc=consorci,dc=global))"
+PLUGIN_USERINFOLDAP_ATTR_USERNAME="uid"
+PLUGIN_USERINFOLDAP_ATTR_NAME="cn"
+PLUGIN_USERINFOLDAP_ATTR_SURNAME="sn"
+PLUGIN_USERINFOLDAP_ATTR_MEMBEROF="memberof"
+PLUGIN_USERINFOLDAP_PREFIX_MEMBEROF="cn="
+PLUGIN_USERINFOLDAP_SUFIX_MEMBEROF=",ou=rols,ou=groups,dc=consorci,dc=global"
+
 
 ####
 #### PAQUETS
@@ -159,7 +185,7 @@ EOF
 
 # comprovacions vàries
 precheck(){
-echo "### comprovacions de sistema: "
+echo -n "### comprovacions de sistema: "
 if ! id $USUARI > /dev/null ; then
     echo "ERROR: No s'ha trobat l'usuari $USUARI"
     exit 1
@@ -202,6 +228,7 @@ if type -t yum > /dev/null ; then
     fi
 fi
 
+echo "OK"
 pause
 }
 # precheck
@@ -478,7 +505,7 @@ pause
 lib_extras(){
 
 # biblioteques commons d'apache
-echo -n "### copiant JBOSS_METADATA_JAR: "
+echo -n "### copiant biblioteca metadata [$PAQUET_METADATA]: "
 if [ ! -e "$PAQUET_METADATA" ]; then
 	if [ "$HTTP_PAQUET_METADATA" == "" ]; then
 	    echo "ERROR: No s'ha trobat el paquet [$PAQUET_METADATA]"
@@ -489,8 +516,9 @@ if [ ! -e "$PAQUET_METADATA" ]; then
 	    check_err "$?"
 	fi
 fi
-cp -v "$PAQUET_METADATA" "${DIR_BASE}/jboss/common/lib/"
-cp -v "$PAQUET_METADATA" "${DIR_BASE}/jboss/client/"
+cp -f "$PAQUET_METADATA" "${DIR_BASE}/jboss/common/lib/"
+cp -f "$PAQUET_METADATA" "${DIR_BASE}/jboss/client/"
+echo "OK"
 
 echo -n "### configurant CXF: "
 # necessitam la variable del home de java per executar ant
@@ -530,6 +558,7 @@ cd "$DIR_BASE"
 
 # ORACLE: si la variable està definida asumim que se vol utilitzar
 if [ "$ORACLE_JAR" != "" ]; then
+    echo -n "### copiant biblioteca de bbdd d'oracle: "
     if [ ! -e "$ORACLE_JAR" ]; then
 	if [ "$HTTP_ORACLE_JAR" == "" ]; then
 	    echo "ERROR: No s'ha trobat el paquet [$ORACLE_JAR]"
@@ -545,6 +574,7 @@ fi
 
 # POSTGRESQL: si la variable està definida asumim que se vol utilitzar
 if [ "$POSTGRESQL_JAR" != "" ]; then
+    echo -n "### copiant biblioteca de postgresql: "
     if [ ! -e "$POSTGRESQL_JAR" ]; then
 	if [ "$HTTP_POSTGRESQL_JAR" == "" ]; then
 	    echo "ERROR: No s'ha trobat el paquet [$POSTGRESQL_JAR]"
@@ -613,10 +643,73 @@ pause
 conf_properties(){
 
 # 2.3.2.- Fitxer de Propietats
-echo "### creant fitxer de propietats: "
+echo -n "### creant fitxer de propietats: "
+
+case $PORTAFIB_PLUGIN_INFOUSER in
+    ldap|org.fundaciobit.plugins.userinformation.ldap.LdapUserInformationPlugin)
+	# plugin ldap info user
+	PLUGIN_INFO_LDAP="
+      <!-- ======== PLUGIN USER-INFORMATION - LDAP ======= -->
+      es.caib.portafib.userinformationplugin=org.fundaciobit.plugins.userinformation.ldap.LdapUserInformationPlugin
+      es.caib.portafib.plugins.userinformation.ldap.host_url=$PLUGIN_USERINFOLDAP_HOST
+      es.caib.portafib.plugins.userinformation.ldap.security_principal=$PLUGIN_USERINFOLDAP_PRINCIPAL
+      es.caib.portafib.plugins.userinformation.ldap.security_authentication=simple
+      es.caib.portafib.plugins.userinformation.ldap.security_credentials=$PLUGIN_USERINFOLDAP_CREDENTIALS
+      es.caib.portafib.plugins.userinformation.ldap.users_context_dn=$PLUGIN_USERINFOLDAP_USERSDN
+      es.caib.portafib.plugins.userinformation.ldap.search_scope=subtree
+      es.caib.portafib.plugins.userinformation.ldap.search_filter=$PLUGIN_USERINFOLDAP_FILTER
+      es.caib.portafib.plugins.userinformation.ldap.attribute.username=$PLUGIN_USERINFOLDAP_ATTR_USERNAME
+      es.caib.portafib.plugins.userinformation.ldap.attribute.mail=mail
+      es.caib.portafib.plugins.userinformation.ldap.attribute.administration_id=postOfficeBox
+      es.caib.portafib.plugins.userinformation.ldap.attribute.name=$PLUGIN_USERINFOLDAP_ATTR_NAME
+      # Has de triar:
+      #       - surname1 i surname2
+      #       - surname
+      es.caib.portafib.plugins.userinformation.ldap.attribute.surname=$PLUGIN_USERINFOLDAP_ATTR_SURNAME
+
+      es.caib.portafib.plugins.userinformation.ldap.attribute.surname1=sn1
+      es.caib.portafib.plugins.userinformation.ldap.attribute.surname2=sn2
+
+      es.caib.portafib.plugins.userinformation.ldap.attribute.telephone=telephoneNumber
+      es.caib.portafib.plugins.userinformation.ldap.attribute.memberof=$PLUGIN_USERINFOLDAP_ATTR_MEMBEROF
+      es.caib.portafib.plugins.userinformation.ldap.prefix_role_match_memberof=$PLUGIN_USERINFOLDAP_PREFIX_MEMBEROF
+      es.caib.portafib.plugins.userinformation.ldap.suffix_role_match_memberof=$PLUGIN_USERINFOLDAP_SUFIX_MEMBEROF
+
+	"
+
+    ;;
+    bbdd|org.fundaciobit.plugins.userinformation.database.DataBaseUserInformationPlugin)
+	# plugin bbdd info user
+	PLUGIN_INFO_BBDD="
+	<!-- ======== PLUGIN USER-INFORMATION - DATABASE ======= -->
+      es.caib.portafib.userinformationplugin=org.fundaciobit.plugins.userinformation.database.DataBaseUserInformationPlugin
+      es.caib.portafib.plugins.userinformation.database.jndi=java:/es.caib.seycon.db.wl
+      es.caib.portafib.plugins.userinformation.database.users_table=SC_WL_USUARI
+      es.caib.portafib.plugins.userinformation.database.username_column=USU_CODI
+      es.caib.portafib.plugins.userinformation.database.administrationid_column=USU_NIF
+      es.caib.portafib.plugins.userinformation.database.name_column=USU_NOM
+      #es.caib.portafib.plugins.userinformation.database.surname_1_column
+      #es.caib.portafib.plugins.userinformation.database.surname_2_column      
+      #es.caib.portafib.plugins.userinformation.database.language_column
+      #es.caib.portafib.plugins.userinformation.database.telephone_column
+      #es.caib.portafib.plugins.userinformation.database.email_column=CONCAT(USU_CODI,'@fundaciobit.org')
+      #es.caib.portafib.plugins.userinformation.database.gender_column
+      #es.caib.portafib.plugins.userinformation.database.password_column
+      es.caib.portafib.plugins.userinformation.database.userroles_table=SC_WL_USUGRU
+      es.caib.portafib.plugins.userinformation.database.userroles_rolename_column=UGR_CODGRU
+      es.caib.portafib.plugins.userinformation.database.userroles_username_column=UGR_CODUSU
+
+	"
+    ;;
+    *)
+	# no hauria d'arribar mai aquí
+	echo "ERROR: No s'ha trobat la configuració del plugin d'informació d'usuari"
+	exit 1
+    ;;
+esac
 
 F_PROPS="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-properties-service.xml"
-( cat << 'EOF'
+( cat << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <server>
   <mbean code="org.jboss.varia.property.SystemPropertiesService" name="jboss:type=Service,name=PortaFIBSystemProperties">
@@ -636,10 +729,10 @@ F_PROPS="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-propertie
 
       es.caib.portafib.development=false
 
-      <!-- Clau per encriptar l'identificador del fitxers a descarregar via web(IMPORTANT tamany de 16 caràcters) -->
-      es.caib.portafib.encryptkey=portafibportafib
+      <!-- Clau per encriptar l'identificador del fitxers a descarregar via web'(IMPORTANT tamany de 16 caràcters) -->
+      es.caib.portafib.encryptkey="$PORTAFIB_ENCRYPTKEY"
 
-      <!-- Llistat de Plugins per l'exportació de dades en els llistats (excel, ods, csv, ...) -->
+      <!-- Llistat de Plugins per l'exportació de dades en els llistats (excel, ods, csv, ...)' -->
       es.caib.portafib.exportdataplugins=org.fundaciobit.plugins.exportdata.cvs.CSVPlugin,org.fundaciobit.plugins.exportdata.ods.ODSPlugin,org.fundaciobit.plugins.exportdata.excel.ExcelPlugin
 
       <!--  Opcional. Indica si s'ha de validar el certificat emprant el Plugin de CheckCertificate
@@ -654,7 +747,7 @@ F_PROPS="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-propertie
 
       <!-- ======== PLUGIN CHECK CERTIFICATE - FAKE ======= -->
       es.caib.portafib.certificateplugin=org.fundaciobit.plugins.certificate.fake.FakeCertificatePlugin
-      
+
       <!-- ======== PLUGIN CHECK CERTIFICATE - @FIRMA ======= -->
 
       <!--
@@ -664,7 +757,7 @@ F_PROPS="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-propertie
       # MODE_VALIDACIO_AMB_REVOCACIO = 1;
       # MODE_VALIDACIO_CADENA = 2;      
       es.caib.portafib.plugins.certificate.afirma.validationmode=1
-      
+
       #es.caib.portafib.plugins.certificate.afirma.endpoint=http://afirma.redsara.es/afirmaws/services/
       es.caib.portafib.plugins.certificate.afirma.endpoint=http://des-afirma.redsara.es/afirmaws/services/
       es.caib.portafib.plugins.certificate.afirma.applicationid=
@@ -680,75 +773,33 @@ F_PROPS="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-propertie
       es.caib.portafib.plugins.certificate.afirma.authorization.ks.cert.alias=1
       es.caib.portafib.plugins.certificate.afirma.authorization.ks.cert.password=
       -->
-      
-      
-      <!-- ======== PLUGIN USER-INFORMATION - DATABASE ======= -->
-      es.caib.portafib.userinformationplugin=org.fundaciobit.plugins.userinformation.database.DataBaseUserInformationPlugin
-      es.caib.portafib.plugins.userinformation.database.jndi=java:/es.caib.seycon.db.wl
-      es.caib.portafib.plugins.userinformation.database.users_table=SC_WL_USUARI
-      es.caib.portafib.plugins.userinformation.database.username_column=USU_CODI
-      es.caib.portafib.plugins.userinformation.database.administrationid_column=USU_NIF
-      es.caib.portafib.plugins.userinformation.database.name_column=USU_NOM
-      #es.caib.portafib.plugins.userinformation.database.surname_1_column
-      #es.caib.portafib.plugins.userinformation.database.surname_2_column      
-      #es.caib.portafib.plugins.userinformation.database.language_column
-      #es.caib.portafib.plugins.userinformation.database.telephone_column
-      #es.caib.portafib.plugins.userinformation.database.email_column=CONCAT(USU_CODI,'@fundaciobit.org')
-      #es.caib.portafib.plugins.userinformation.database.gender_column
-      #es.caib.portafib.plugins.userinformation.database.password_column
-      es.caib.portafib.plugins.userinformation.database.userroles_table=SC_WL_USUGRU
-      es.caib.portafib.plugins.userinformation.database.userroles_rolename_column=UGR_CODGRU
-      es.caib.portafib.plugins.userinformation.database.userroles_username_column=UGR_CODUSU
-      
-      
-      <!-- ======== PLUGIN USER-INFORMATION - LDAP ======= -->
-      <!--
-      es.caib.portafib.userinformationplugin=org.fundaciobit.plugins.userinformation.ldap.LdapUserInformationPlugin
-      es.caib.portafib.plugins.userinformation.ldap.host_url=ldap://ldap.ibit.org:389
-      es.caib.portafib.plugins.userinformation.ldap.security_principal=[LDAPUSERNAME]
-      es.caib.portafib.plugins.userinformation.ldap.security_authentication=simple
-      es.caib.portafib.plugins.userinformation.ldap.security_credentials=[PASSWORD of LDAPUSERNAME]
-      es.caib.portafib.plugins.userinformation.ldap.users_context_dn=cn=Users,dc=ibitnet,dc=lan
-      es.caib.portafib.plugins.userinformation.ldap.search_scope=onelevel
-      es.caib.portafib.plugins.userinformation.ldap.search_filter=(|(memberOf=CN=@PFI_ADMIN,CN=Users,DC=ibitnet,DC=lan)(memberOf=CN=@PFI_USER,CN=Users,DC=ibitnet,DC=lan))
-      es.caib.portafib.plugins.userinformation.ldap.attribute.username=sAMAccountName
-      es.caib.portafib.plugins.userinformation.ldap.attribute.mail=mail
-      es.caib.portafib.plugins.userinformation.ldap.attribute.administration_id=postOfficeBox
-      es.caib.portafib.plugins.userinformation.ldap.attribute.name=givenName
-      # Has de triar:
-      #       - "surname1" i "surname2"
-      #       - "surname"
-      es.caib.portafib.plugins.userinformation.ldap.attribute.surname=sn
 
-      es.caib.portafib.plugins.userinformation.ldap.attribute.surname1=sn1
-      es.caib.portafib.plugins.userinformation.ldap.attribute.surname2=sn2
+	$PLUGIN_INFO_BBDD
 
-      es.caib.portafib.plugins.userinformation.ldap.attribute.telephone=telephoneNumber
-      es.caib.portafib.plugins.userinformation.ldap.attribute.memberof=memberOf
-      es.caib.portafib.plugins.userinformation.ldap.prefix_role_match_memberof=CN=@
-      es.caib.portafib.plugins.userinformation.ldap.suffix_role_match_memberof=,CN=Users,DC=ibitnet,DC=lan
-      -->
+	$PLUGIN_INFO_LDAP
 
       <!--  Afegir aqui altres propietats -->
 
     </attribute>
   </mbean>
 </server>
-root@GMPREPORTAFIR:/opt/paquets/portafi
-
 EOF
 
 ) > "$F_PROPS"
+echo "OK"
+
+# directori del magatzem de fitxers
+if [ ! -e "$PORTAFIB_FILES" ]; then
+    echo -n "creant directori de magatzem de fitxers [$PORTAFIB_FILES]: "
+    mkdir -vp "$PORTAFIB_FILES"
 fi
 
 
-echo "OK"
 
 echo "DEBUG: [$LINENO]" && exit 1
 
 pause
 }
-
 
 
 conf_ds(){

@@ -81,7 +81,7 @@ SERVIDOR="portafibpre01.test.com"
 # SERVIDOR="172.26.67.167"
 
 ####
-#### PROPIETATS PORTAFIB
+#### PROPIETATS PORTAFIB I PLUGINS
 ####
 
 # Propietat que indica als projectes que activin les caracteristiques
@@ -127,6 +127,35 @@ PLUGIN_USERINFOLDAP_ATTR_MEMBEROF="memberof"
 PLUGIN_USERINFOLDAP_PREFIX_MEMBEROF="cn="
 PLUGIN_USERINFOLDAP_SUFIX_MEMBEROF=",ou=rols,ou=groups,dc=consorci,dc=global"
 
+# 2.3.4.- Configurar Servidor de Correu
+CORREU_USUARI="e-admin@ticmallorca.net"
+CORREU_POP3="smtp.ticmallorca.net"
+CORREU_SMTP="smtp.ticmallorca.net"
+CORREU_ORIGEN="portafib@ticmallorca.net"
+
+####
+#### Autenticació
+####
+
+# 2.3.5.- Autenticació i Autorització per Usuaris Persona
+# aquests són els usuaris d'administració i gestió del
+# sistema, no els usuaris de la pròpia aplicació portafib
+
+# sistema d'autenticació. pot ser bbdd o ldap. en cas de
+# utilitzar ldap s'utilitzaran les dades del plugin userinfo
+AUTH_PERSONA="bbdd"
+
+AUTH_PERSONA_DS_URL="jdbc:postgresql://localhost:5432/seycon"
+AUTH_PERSONA_DS_DRIVER="org.postgresql.Driver"
+AUTH_PERSONA_DS_USER="seycon"
+AUTH_PERSONA_DS_PASS="seycon"
+
+# 2.5.- DataSources
+# ds per la bbdd portafib d'usuaris d'aplicació
+DS_PORTAFIB_URL="jdbc:postgresql://localhost:5432/portafib"
+DS_PORTAFIB_DRIVER="org.postgresql.Driver"
+DS_PORTAFIB_USER="portafib"
+DS_PORTAFIB_PASS="portafib"
 
 ####
 #### PAQUETS
@@ -156,8 +185,8 @@ PAQUET_METADATA="${DIR_PAQUETS}/jboss-metadata.jar"
 HTTP_PAQUET_METADATA="https://repository.jboss.org/nexus/content/repositories/root_repository/jboss/metadata/1.0.6.GA-brew/lib/jboss-metadata.jar"
 
 # biblioteca CXF
-PAQUET_CXF="${DIR_PAQUETS}/jbossws-cxf-3.4.1.GA.zip"
-HTTP_PAQUET_CXF="http://download.jboss.org/jbossws/jbossws-cxf-3.4.1.GA.zip"
+PAQUET_CXF="${DIR_PAQUETS}/jbossws-cxf-3.4.0.GA.zip"
+HTTP_PAQUET_CXF="http://download.jboss.org/jbossws/jbossws-cxf-3.4.0.GA.zip"
 
 # altres fitxers
 SCRIPT_INICI="/etc/init.d/jboss-portafib-${ENTITAT}"
@@ -304,21 +333,7 @@ chown -R "$USUARI" "$DIR_BASE"
 pause
 }
 
-instancia(){
-# configurant instància
-echo -n "### configurant instància $INSTANCIA [${DIR_BASE}/jboss/server/${INSTANCIA}]: "
-case $INSTANCIA in
-    all|default|minimal|standard)
-	echo "OK"
-    ;;
-    *)
-	cp -pr "${DIR_BASE}/jboss/server/default" "${DIR_BASE}/jboss/server/${INSTANCIA}"
-	echo "OK"
-	chown -R "$USUARI" "${DIR_BASE}/jboss/server/${INSTANCIA}"
-    ;;
-esac
-pause
-}
+
 
 script_inici(){
 # script inici
@@ -504,23 +519,9 @@ pause
 
 lib_extras(){
 
-# biblioteques commons d'apache
-echo -n "### copiant biblioteca metadata [$PAQUET_METADATA]: "
-if [ ! -e "$PAQUET_METADATA" ]; then
-	if [ "$HTTP_PAQUET_METADATA" == "" ]; then
-	    echo "ERROR: No s'ha trobat el paquet [$PAQUET_METADATA]"
-	    exit 1
-	else
-	    echo "### baixant el paquet des de [$HTTP_PAQUET_METADATA]"
-	    wget --no-check-certificate --no-cookies -nv -O "$PAQUET_METADATA" "$HTTP_PAQUET_METADATA"
-	    check_err "$?"
-	fi
-fi
-cp -f "$PAQUET_METADATA" "${DIR_BASE}/jboss/common/lib/"
-cp -f "$PAQUET_METADATA" "${DIR_BASE}/jboss/client/"
-echo "OK"
 
-echo -n "### configurant CXF: "
+
+echo -n "### configurant CXF [$PAQUET_CXF]: "
 # necessitam la variable del home de java per executar ant
 export JAVA_HOME="${DIR_BASE}/java"
 if [ ! -e "$PAQUET_CXF" ]; then
@@ -533,6 +534,7 @@ if [ ! -e "$PAQUET_CXF" ]; then
 	    check_err "$?"
 	fi
 fi
+
 
 # generam un fitxer temporal i descomprimim el cxf
 DCXFTEMP=`mktemp -d`
@@ -552,6 +554,25 @@ ant -q deploy-jboss510
 rm -rf "$DCXFTEMP"
 
 cd "$DIR_BASE"
+
+
+# biblioteques commons d'apache.
+# ATENCIÓ!!! AIXÒ HA D'ANAR DESPRÉS DE LA COMPILACIÓ CXF!!!
+echo -n "### copiant biblioteca metadata [$PAQUET_METADATA]: "
+if [ ! -e "$PAQUET_METADATA" ]; then
+	if [ "$HTTP_PAQUET_METADATA" == "" ]; then
+	    echo "ERROR: No s'ha trobat el paquet [$PAQUET_METADATA]"
+	    exit 1
+	else
+	    echo "### baixant el paquet des de [$HTTP_PAQUET_METADATA]"
+	    wget --no-check-certificate --no-cookies -nv -O "$PAQUET_METADATA" "$HTTP_PAQUET_METADATA"
+	    check_err "$?"
+	fi
+fi
+cp -f "$PAQUET_METADATA" "${DIR_BASE}/jboss/common/lib/"
+cp -f "$PAQUET_METADATA" "${DIR_BASE}/jboss/client/"
+echo "OK"
+
 
 
 # 2.3.1.- Fitxer JDBC d'accés a BBDD
@@ -588,13 +609,36 @@ if [ "$POSTGRESQL_JAR" != "" ]; then
     cp -vf "$POSTGRESQL_JAR" "${DIR_BASE}/jboss/common/lib/"
 fi
 
+
 pause
 
 }
 
 
+instancia(){
+# ATENCIÓ: és convenient deixar la creació de la instància pel després 
+# de la configuració del CXF i altres biblioteques ja que se sobreescriuen
+# configurant instància
+echo -n "### configurant instància $INSTANCIA [${DIR_BASE}/jboss/server/${INSTANCIA}]: "
+case $INSTANCIA in
+    all|default|minimal|standard)
+	echo "OK"
+    ;;
+    *)
+	cp -pr "${DIR_BASE}/jboss/server/default" "${DIR_BASE}/jboss/server/${INSTANCIA}"
+	echo "OK"
+	chown -R "$USUARI" "${DIR_BASE}/jboss/server/${INSTANCIA}"
+    ;;
+esac
+
+pause
+}
+
+
+
 conf_jboss(){
 # configuracions dins del jboss
+
 
 # opcions vàries de java dins el jboss
 echo -n "### configurant opcions de java: "
@@ -602,6 +646,8 @@ echo 'export DISPLAY=":0.0"' >> "${DIR_BASE}/jboss/bin/run.conf"
 JAVA_PATH="${DIR_BASE}/java/bin/java"
 echo "JAVA=\"$JAVA_PATH\"" >> "${DIR_BASE}/jboss/bin/run.conf"
 echo "OK"
+
+
 
 echo -n "### configurant directori de desplegament: "
 # F_DESPLEGAMENT="${DIR_BASE}/jboss/server/${INSTANCIA}/conf/jboss-service.xml"
@@ -614,6 +660,9 @@ if [ "$?" != "0" ]; then
 fi
 echo "OK"
 
+
+
+
 # 2.2.5.- Permetre consultes sobre múltiples Datasources
 echo -n "### configurant consultes sobre múltiples datasources: "
 F_TSPROP="${DIR_BASE}/jboss/server/${INSTANCIA}/conf/jbossts-properties.xml"
@@ -623,12 +672,14 @@ if [ "$?" != "0" ]; then
 fi
 echo "OK"
 
+
 # 2.2.6.- Autenticador WSBASIC
 echo -n "### configurant Autenticador WSBASIC: "
 F_WSBASIC="${DIR_BASE}/jboss/server/${INSTANCIA}/deployers/jbossweb.deployer/META-INF/war-deployers-jboss-beans.xml"
 grep -q '<key>WSBASIC</key>' "$F_WSBASIC"
 if [ "$?" != "0" ]; then
-    sed -i 's;name="authenticators">;name="authenticators">\n\t<entry>\n\t\t<key>WSBASIC</key>\n\t\t<value>org.apache.catalina.authenticator.BasicAuthenticator</value>\n\t</entry>;' "$F_WSBASIC"
+
+    sed -i 's;<key>BASIC</key>;\t<key>WSBASIC</key>\n\t\t<value>org.apache.catalina.authenticator.BasicAuthenticator</value>\n\t</entry>\n\t<entry>\n\t\t<key>BASIC</key>;' "$F_WSBASIC"
 
 fi
 echo "OK"
@@ -692,7 +743,7 @@ case $PORTAFIB_PLUGIN_INFOUSER in
       #es.caib.portafib.plugins.userinformation.database.surname_2_column      
       #es.caib.portafib.plugins.userinformation.database.language_column
       #es.caib.portafib.plugins.userinformation.database.telephone_column
-      #es.caib.portafib.plugins.userinformation.database.email_column=CONCAT(USU_CODI,'@fundaciobit.org')
+      #es.caib.portafib.plugins.userinformation.database.email_column=USU_CODI
       #es.caib.portafib.plugins.userinformation.database.gender_column
       #es.caib.portafib.plugins.userinformation.database.password_column
       es.caib.portafib.plugins.userinformation.database.userroles_table=SC_WL_USUGRU
@@ -794,453 +845,221 @@ if [ ! -e "$PORTAFIB_FILES" ]; then
     mkdir -vp "$PORTAFIB_FILES"
 fi
 
+pause
+}
 
 
-echo "DEBUG: [$LINENO]" && exit 1
+conf_plugins(){
+echo "##### configuracions de plugins "
+
+# 2.3.3.- Configurar Coes
+echo -n "### configurant coes de correu: "
+F_CORREU_QUEUE="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-mailsqueue-service.xml"
+( cat << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mbean code="org.jboss.jms.server.destination.QueueService" name="jboss.messaging.destination:service=Queue,name=jms/es.caib.portafib.PortaFIBMailsQueue" xmbean-dd="xmdesc/Queue-xmbean.xml">
+    <depends optional-attribute-name="ServerPeer">jboss.messaging:service=ServerPeer</depends>
+    <depends>jboss.messaging:service=PostOffice</depends>
+    <attribute name="JNDIName">jms/es.caib.portafib.PortaFIBMailsQueue</attribute>
+    <attribute name="RedeliveryDelay">10000</attribute>
+    <attribute name="MaxDeliveryAttempts">3</attribute>
+</mbean>
+
+EOF
+) > "$F_CORREU_QUEUE"
+echo "OK"
+
+# 2.3.4.- Configurar Servidor de Correu
+echo -n "### configurant servidor de correu: "
+F_CORREU_SERVER="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-mail-service.xml"
+( cat << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<server>
+
+  <!-- ==================================================================== -->
+  <!-- Mail Connection Factory                                              -->
+  <!-- ==================================================================== -->
+
+  <mbean code="org.jboss.mail.MailService" name="jboss:service=portafibMail">
+    <attribute name="JNDIName">java:/es.caib.portafib.mail</attribute>
+    <attribute name="Configuration">
+      <!-- A test configuration -->
+      <configuration>
+        <!-- Change to your mail server prototocol -->
+        <property name="mail.store.protocol" value="pop3"/>
+        <property name="mail.transport.protocol" value="smtp"/>
+
+        <!-- Change to the user who will receive mail  -->
+        <property name="mail.user" value="$CORREU_USUARI"/>
+
+        <!-- Change to the mail server  -->
+        <property name="mail.pop3.host" value="$CORREU_POP3"/>
+
+        <!-- Change to the SMTP gateway server -->
+        <property name="mail.smtp.host" value="$CORREU_SMTP"/>
+
+        <!-- The mail server port -->
+        <property name="mail.smtp.port" value="25"/>
+
+        <!-- Change to the address mail will be from  -->
+        <property name="mail.from" value="$CORREU_ORIGEN"/>
+
+        <!-- Enable debugging output from the javamail classes -->
+        <property name="mail.debug" value="false"/>
+      </configuration>
+    </attribute>
+    <depends>jboss:service=Naming</depends>
+  </mbean>
+</server>
+EOF
+) > "$F_CORREU_SERVER"
+echo "OK"
+
 
 pause
 }
 
+
+conf_auth(){
+
+# comprovam que s'hagi configurat ja el login-config.xml
+grep -q '<application-policy name = "seycon">' "${DIR_BASE}/jboss/server/${INSTANCIA}/conf/login-config.xml"
+if [ "$?" == "0" ]; then
+    echo "### ja s'ha configurat login-config.xml "
+else
+
+case $AUTH_PERSONA in
+    bbdd)
+	echo -n "### Creant DS per autenticació Persona: "
+	# 2.3.5.- Autenticació i Autorització per Usuaris Persona
+
+	( cat << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<datasources>
+  <local-tx-datasource>
+    <jndi-name>es.caib.seycon.db.wl</jndi-name>
+    <connection-url>$AUTH_PERSONA_DS_URL</connection-url>
+    <driver-class>$AUTH_PERSONA_DS_DRIVER</driver-class>
+    <user-name>$AUTH_PERSONA_DS_USER</user-name>
+    <password>$AUTH_PERSONA_DS_PASS</password>
+  </local-tx-datasource>
+</datasources>
+EOF
+	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/seyconds-ds.xml"
+
+	echo "OK"
+	echo -n "### modificant login-config.xml per autenticació Persona amb BBDD: "
+
+	# sed -i "s;^JBOSS_HOME=.*;JBOSS_HOME=\"${DIR_BASE}/jboss\";" "$SCRIPT_INICI"
+
+	POLTEXT='    <!-- Directori BBDD per usuaris Persona -->
+    <application-policy name = "seycon">
+	<authentication>
+	    <login-module code="es.caib.portafib.back.security.BaseCertLoginModule"  flag = "sufficient">
+	    </login-module>
+
+	    <login-module code="org.jboss.security.auth.spi.DatabaseServerLoginModule" flag="sufficient"> 
+		<module-option name="dsJndiName">java:/es.caib.seycon.db.wl</module-option>
+	        <module-option name="principalsQuery">
+	    	    select USU_PASS from SC_WL_USUARI where USU_CODI = ?
+        	</module-option>
+        	<module-option name="rolesQuery">
+		    select UGR_CODGRU, "Roles" from SC_WL_USUGRU where UGR_CODUSU = ?
+        	</module-option>
+	    </login-module>
+'
+
+    ;;
+    ldap)
+	echo -n "### modificant login-config.xml per autenticació Persona amb LDAP: "
+	# utilitzam les mateixes dades que pel plugin de userinfo
+	POLTEXT="<!-- Directori LDAP per usuaris Persona -->
+
+    <application-policy name = \"seycon\">
+	<authentication>
+         <login-module code=\"org.fundaciobit.plugins.loginmodule.ldap.LdapLoginModule\" flag=\"sufficient\" >
+	    <module-option name=\"ldap.host_url\">$PLUGIN_USERINFOLDAP_HOST</module-option>
+	    <module-option name=\"ldap.security_principal\">$PLUGIN_USERINFOLDAP_PRINCIPAL</module-option>
+	    <module-option name=\"ldap.security_credentials\">$PLUGIN_USERINFOLDAP_CREDENTIALS</module-option>
+	    <module-option name=\"ldap.security_authentication\">simple</module-option>
+	    <module-option name=\"ldap.users_context_dn\">$PLUGIN_USERINFOLDAP_USERSDN</module-option>
+	    <module-option name=\"ldap.search_scope\">subtree</module-option>
+	    <module-option name=\"ldap.search_filter\">$PLUGIN_USERINFOLDAP_FILTER</module-option>
+	    <module-option name=\"ldap.prefix_role_match_memberof\">$PLUGIN_USERINFOLDAP_PREFIX_MEMBEROF</module-option>
+	    <module-option name=\"ldap.suffix_role_match_memberof\">$PLUGIN_USERINFOLDAP_SUFIX_MEMBEROF</module-option>
+	    <module-option name=\"ldap.attribute.username\">$PLUGIN_USERINFOLDAP_ATTR_USERNAME</module-option>
+	    <module-option name=\"ldap.attribute.mail\">mail</module-option>
+	    <module-option name=\"ldap.attribute.administration_id\">postOfficeBox</module-option>
+	    <module-option name=\"ldap.attribute.name\">$PLUGIN_USERINFOLDAP_ATTR_NAME</module-option>
+	    <module-option name=\"ldap.attribute.surname\">$PLUGIN_USERINFOLDAP_ATTR_SURNAME</module-option>
+	    <module-option name=\"ldap.attribute.telephone\">telephoneNumber</module-option>
+	    <module-option name=\"ldap.attribute.memberof\">$PLUGIN_USERINFOLDAP_ATTR_MEMBEROF</module-option>
+	  </login-module>
+"
+    ;;
+    *)
+	# no hauria d'arribar mai aquí
+	echo "ERROR: no s'ha configurat correctament"
+	exit 1
+    ;;
+esac
+
+# afegim també la part d'autenticació d'usuaris Aplicació
+POLTEXT="$POLTEXT
+
+	<!-- BBDD Usuaris Aplicació -->
+	<login-module code=\"org.jboss.security.auth.spi.DatabaseServerLoginModule\" flag=\"sufficient\">
+	    <module-option name=\"dsJndiName\">java:/es.caib.portafib.db</module-option>
+	    <module-option name=\"principalsQuery\">
+		SELECT contrasenya FROM pfi_usuariaplicacio WHERE usuariaplicacioid = ?
+	    </module-option>
+	    <module-option name=\"rolesQuery\">
+		SELECT roleid, 'Roles' FROM pfi_roleusuariaplicacio where usuariaplicacioid = ?
+	    </module-option>
+	</login-module>
+
+	</authentication>
+    </application-policy>
+</policy>"
+
+# POLTEXT=`echo "$POLTEXT" | sed -E ':a;N;$!ba;s/\r{0,1}\n/\\\n/g'`
+POLTEXT=`echo "$POLTEXT" | sed 's/$/\\\n/' | tr -d '\n'`
+
+sed -i "s;</policy>;$POLTEXT;" "${DIR_BASE}/jboss/server/${INSTANCIA}/conf/login-config.xml"
+
+echo "OK"
+
+fi
+
+}
 
 conf_ds(){
-echo "### Creant Datasources del tipus local-tx-datasource"
+echo -n "### Creant DS portafib per usuaris de la aplicació: "
 
-echo -n "##### configurant audita amb "
-case $DS_AUDITA_DRIVER in
-    org.postgresql.Driver)
-	echo -n "Postgresql: "
-	( cat << EOF
+# 2.5.- DataSources
+( cat << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <datasources>
-  <local-tx-datasource>
-    <jndi-name>es.caib.audita.db</jndi-name>
-    <connection-url>$DS_AUDITA_URL</connection-url>
-    <driver-class>$DS_AUDITA_DRIVER</driver-class>
-    <user-name>$DS_AUDITA_USER</user-name>
-    <password>$DS_AUDITA_PASS</password>
-    <min-pool-size>1</min-pool-size>
-    <max-pool-size>20</max-pool-size>
-  </local-tx-datasource>
+    <local-tx-datasource>
+        <jndi-name>es.caib.portafib.db</jndi-name>
+        <connection-url>$DS_PORTAFIB_URL</connection-url>
+        <driver-class>$DS_PORTAFIB_DRIVER</driver-class>
+        <user-name>$DS_PORTAFIB_USER</user-name>
+        <password>$DS_PORTAFIB_PASS</password>
+    </local-tx-datasource>
 </datasources>
 EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/audita-postgresql-ds.xml"
-    ;;
-    oracle.jdbc.driver.OracleDriver)
-	echo -n "Oracle: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <local-tx-datasource>
-    <jndi-name>es.caib.audita.db</jndi-name>
-    <connection-url>$DS_AUDITA_URL</connection-url>
-    <driver-class>$DS_AUDITA_DRIVER</driver-class>
-    <user-name>$DS_AUDITA_USER</user-name>
-    <password>$DS_AUDITA_PASS</password>
-    <min-pool-size>1</min-pool-size>
-    <max-pool-size>20</max-pool-size>
-    <valid-connection-checker-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleValidConnectionChecker</valid-connection-checker-class-name>
-    <exception-sorter-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleExceptionSorter</exception-sorter-class-name>
-  </local-tx-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/audita-oracle-ds.xml"
-    ;;
-    *)
-	echo ""
-	echo "ERROR: Driver no suportat [$DS_AUDITA_DRIVER]"
-	exit 1
-    ;;
-esac
-echo "OK"
+) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-ds.xml"
 
-echo -n "##### configurant form amb "
-case $DS_FORM_DRIVER in
-    org.postgresql.Driver)
-	echo -n "Postgresql: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <local-tx-datasource>
-    <jndi-name>es.caib.rolforms.db</jndi-name>
-    <connection-url>$DS_FORM_URL</connection-url>
-    <driver-class>$DS_FORM_DRIVER</driver-class>
-    <user-name>$DS_FORM_USER</user-name>
-    <password>$DS_FORM_PASS</password>
-    <min-pool-size>1</min-pool-size>
-    <max-pool-size>20</max-pool-size>
-  </local-tx-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/form-postgresql-ds.xml"
-    ;;
-    oracle.jdbc.driver.OracleDriver)
-	echo -n "Oracle: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <local-tx-datasource>
-    <jndi-name>es.caib.rolforms.db</jndi-name>
-    <connection-url>$DS_FORM_URL</connection-url>
-    <driver-class>$DS_FORM_DRIVER</driver-class>
-    <user-name>$DS_FORM_USER</user-name>
-    <password>$DS_FORM_PASS</password>
-    <min-pool-size>1</min-pool-size>
-    <max-pool-size>20</max-pool-size>
-    <valid-connection-checker-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleValidConnectionChecker</valid-connection-checker-class-name>
-    <exception-sorter-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleExceptionSorter</exception-sorter-class-name>
-  </local-tx-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/form-oracle-ds.xml"
-    ;;
-    *)
-	echo ""
-	echo "ERROR: Driver no suportat [$DS_FORM_DRIVER]"
-	exit 1
-    ;;
-esac
 echo "OK"
 
 
-echo -n "##### configurant loginmock amb "
-case $DS_LOGINMOCK_DRIVER in
-    org.postgresql.Driver)
-	echo -n "Postgresql: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <local-tx-datasource>
-    <jndi-name>es.caib.mock.loginModule.db</jndi-name>
-    <connection-url>$DS_LOGINMOCK_URL</connection-url>
-    <driver-class>$DS_LOGINMOCK_DRIVER</driver-class>
-    <user-name>$DS_LOGINMOCK_USER</user-name>
-    <password>$DS_LOGINMOCK_PASS</password>
-    <min-pool-size>1</min-pool-size>
-    <max-pool-size>20</max-pool-size>
-  </local-tx-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/loginmock-postgresql-ds.xml"
-    ;;
-    oracle.jdbc.driver.OracleDriver)
-	echo -n "Oracle: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <local-tx-datasource>
-    <jndi-name>es.caib.mock.loginModule.db</jndi-name>
-    <connection-url>$DS_FORM_URL</connection-url>
-    <driver-class>$DS_FORM_DRIVER</driver-class>
-    <user-name>$DS_FORM_USER</user-name>
-    <password>$DS_FORM_PASS</password>
-    <min-pool-size>1</min-pool-size>
-    <max-pool-size>20</max-pool-size>
-    <valid-connection-checker-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleValidConnectionChecker</valid-connection-checker-class-name>
-    <exception-sorter-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleExceptionSorter</exception-sorter-class-name>
-  </local-tx-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/form-oracle-ds.xml"
-    ;;
-    *)
-	echo ""
-	echo "ERROR: Driver no suportat [$DS_LOGINMOCK_DRIVER]"
-	exit 1
-    ;;
-esac
-echo "OK"
-
-
-echo "### Creant Datasources del tipus xa-datasource"
-echo -n "##### configurant bantel amb "
-case $DS_BANTEL_CLASS in
-    org.postgresql.xa.PGXADataSource)
-	echo -n "Postgresql: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <xa-datasource>
-    <jndi-name>es.caib.bantel.db</jndi-name>
-    <track-connection-by-tx/>
-    <isSameRM-override-value>false</isSameRM-override-value>
-    <xa-datasource-class>org.postgresql.xa.PGXADataSource</xa-datasource-class>
-     <xa-datasource-property name="ServerName">$DS_BANTEL_SERVER</xa-datasource-property>
-     <xa-datasource-property name="PortNumber">$DS_BANTEL_PORT</xa-datasource-property>
-     <xa-datasource-property name="DatabaseName">$DS_BANTEL_DATABASE</xa-datasource-property>
-    <xa-datasource-property name="User">$DS_BANTEL_USER</xa-datasource-property>
-    <xa-datasource-property name="Password">$DS_BANTEL_PASS</xa-datasource-property>
-    <no-tx-separate-pools/>
-      <metadata>
-         <type-mapping>$DS_BANTEL_TYPEMAPPING</type-mapping>
-      </metadata>
-  </xa-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/bantel-postgresql-ds.xml"
-    ;;
-    oracle.jdbc.xa.client.OracleXADataSource)
-	echo -n "Oracle: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <xa-datasource>
-    <jndi-name>es.caib.bantel.db</jndi-name>
-    <track-connection-by-tx/>
-    <isSameRM-override-value>false</isSameRM-override-value>
-    <xa-datasource-class>oracle.jdbc.xa.client.OracleXADataSource</xa-datasource-class> 
-    <xa-datasource-property name="URL">$DS_BANTER_URL</xa-datasource-property>
-    <xa-datasource-property name="User">$DS_BANTEL_USER</xa-datasource-property>
-    <xa-datasource-property name="Password">$DS_BANTEL_PASS</xa-datasource-property>
-    <exception-sorter-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleExceptionSorter</exception-sorter-class-name>
-    <no-tx-separate-pools/>
-      <metadata>
-         <type-mapping>$DS_BANTEL_TYPEMAPPING</type-mapping>
-      </metadata>
-  </xa-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/bantel-oracle-ds.xml"
-    ;;
-    *)
-	echo ""
-	echo "ERROR: Driver no suportat [$DS_BANTEL_CLASS]"
-	exit 1
-    ;;
-esac
-echo "OK"
-
-echo -n "##### configurant mobtratel amb "
-case $DS_MOBTRATEL_CLASS in
-    org.postgresql.xa.PGXADataSource)
-	echo -n "Postgresql: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <xa-datasource>
-    <jndi-name>es.caib.mobtratel.db</jndi-name>
-    <track-connection-by-tx/>
-    <isSameRM-override-value>false</isSameRM-override-value>
-    <xa-datasource-class>org.postgresql.xa.PGXADataSource</xa-datasource-class>
-     <xa-datasource-property name="ServerName">$DS_MOBTRATEL_SERVER</xa-datasource-property>
-     <xa-datasource-property name="PortNumber">$DS_MOBTRATEL_PORT</xa-datasource-property>
-     <xa-datasource-property name="DatabaseName">$DS_MOBTRATEL_DATABASE</xa-datasource-property>
-    <xa-datasource-property name="User">$DS_MOBTRATEL_USER</xa-datasource-property>
-    <xa-datasource-property name="Password">$DS_MOBTRATEL_PASS</xa-datasource-property>
-    <no-tx-separate-pools/>
-      <metadata>
-         <type-mapping>$DS_MOBTRATEL_TYPEMAPPING</type-mapping>
-      </metadata>
-  </xa-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/mobtratel-postgresql-ds.xml"
-    ;;
-    oracle.jdbc.xa.client.OracleXADataSource)
-	echo -n "Oracle: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <xa-datasource>
-    <jndi-name>es.caib.mobtratel.db</jndi-name>
-    <track-connection-by-tx/>
-    <isSameRM-override-value>false</isSameRM-override-value>
-    <xa-datasource-class>oracle.jdbc.xa.client.OracleXADataSource</xa-datasource-class> 
-    <xa-datasource-property name="URL">$DS_MOBTRATEL_URL</xa-datasource-property>
-    <xa-datasource-property name="User">$DS_MOBTRATEL_USER</xa-datasource-property>
-    <xa-datasource-property name="Password">$DS_MOBTRATEL_PASS</xa-datasource-property>
-    <exception-sorter-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleExceptionSorter</exception-sorter-class-name>
-    <no-tx-separate-pools/>
-      <metadata>
-         <type-mapping>$DS_MOBTRATEL_TYPEMAPPING</type-mapping>
-      </metadata>
-  </xa-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/mobtratel-oracle-ds.xml"
-    ;;
-    *)
-	echo ""
-	echo "ERROR: Driver no suportat [$DS_MOBTRATEL_CLASS]"
-	exit 1
-    ;;
-esac
-echo "OK"
-
-echo -n "##### configurant redose amb "
-case $DS_REDOSE_CLASS in
-    org.postgresql.xa.PGXADataSource)
-	echo -n "Postgresql: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <xa-datasource>
-    <jndi-name>es.caib.redose.db</jndi-name>
-    <track-connection-by-tx/>
-    <isSameRM-override-value>false</isSameRM-override-value>
-    <xa-datasource-class>org.postgresql.xa.PGXADataSource</xa-datasource-class>
-     <xa-datasource-property name="ServerName">$DS_REDOSE_SERVER</xa-datasource-property>
-     <xa-datasource-property name="PortNumber">$DS_REDOSE_PORT</xa-datasource-property>
-     <xa-datasource-property name="DatabaseName">$DS_REDOSE_DATABASE</xa-datasource-property>
-    <xa-datasource-property name="User">$DS_REDOSE_USER</xa-datasource-property>
-    <xa-datasource-property name="Password">$DS_REDOSE_PASS</xa-datasource-property>
-    <no-tx-separate-pools/>
-      <metadata>
-         <type-mapping>$DS_REDOSE_TYPEMAPPING</type-mapping>
-      </metadata>
-  </xa-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/redose-postgresql-ds.xml"
-    ;;
-    oracle.jdbc.xa.client.OracleXADataSource)
-	echo -n "Oracle: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <xa-datasource>
-    <jndi-name>es.caib.redose.db</jndi-name>
-    <track-connection-by-tx/>
-    <isSameRM-override-value>false</isSameRM-override-value>
-    <xa-datasource-class>oracle.jdbc.xa.client.OracleXADataSource</xa-datasource-class> 
-    <xa-datasource-property name="URL">$DS_REDOSE_URL</xa-datasource-property>
-    <xa-datasource-property name="User">$DS_REDOSE_USER</xa-datasource-property>
-    <xa-datasource-property name="Password">$DS_REDOSE_PASS</xa-datasource-property>
-    <exception-sorter-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleExceptionSorter</exception-sorter-class-name>
-    <no-tx-separate-pools/>
-      <metadata>
-         <type-mapping>$DS_REDOSE_TYPEMAPPING</type-mapping>
-      </metadata>
-  </xa-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/redose-oracle-ds.xml"
-    ;;
-    *)
-	echo ""
-	echo "ERROR: Driver no suportat [$DS_REDOSE_CLASS]"
-	exit 1
-    ;;
-esac
-echo "OK"
-
-echo -n "##### configurant sistra amb "
-case $DS_SISTRA_CLASS in
-    org.postgresql.xa.PGXADataSource)
-	echo -n "Postgresql: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <xa-datasource>
-    <jndi-name>es.caib.sistra.db</jndi-name>
-    <track-connection-by-tx/>
-    <isSameRM-override-value>false</isSameRM-override-value>
-    <xa-datasource-class>org.postgresql.xa.PGXADataSource</xa-datasource-class>
-     <xa-datasource-property name="ServerName">$DS_SISTRA_SERVER</xa-datasource-property>
-     <xa-datasource-property name="PortNumber">$DS_SISTRA_PORT</xa-datasource-property>
-     <xa-datasource-property name="DatabaseName">$DS_SISTRA_DATABASE</xa-datasource-property>
-    <xa-datasource-property name="User">$DS_SISTRA_USER</xa-datasource-property>
-    <xa-datasource-property name="Password">$DS_SISTRA_PASS</xa-datasource-property>
-    <no-tx-separate-pools/>
-      <metadata>
-         <type-mapping>$DS_SISTRA_TYPEMAPPING</type-mapping>
-      </metadata>
-  </xa-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/sistra-postgresql-ds.xml"
-    ;;
-    oracle.jdbc.xa.client.OracleXADataSource)
-	echo -n "Oracle: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <xa-datasource>
-    <jndi-name>es.caib.sistra.db</jndi-name>
-    <track-connection-by-tx/>
-    <isSameRM-override-value>false</isSameRM-override-value>
-    <xa-datasource-class>oracle.jdbc.xa.client.OracleXADataSource</xa-datasource-class> 
-    <xa-datasource-property name="URL">$DS_SISTRA_URL</xa-datasource-property>
-    <xa-datasource-property name="User">$DS_SISTRA_USER</xa-datasource-property>
-    <xa-datasource-property name="Password">$DS_SISTRA_PASS</xa-datasource-property>
-    <exception-sorter-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleExceptionSorter</exception-sorter-class-name>
-    <no-tx-separate-pools/>
-      <metadata>
-         <type-mapping>$DS_SISTRA_TYPEMAPPING</type-mapping>
-      </metadata>
-  </xa-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/sistra-oracle-ds.xml"
-    ;;
-    *)
-	echo ""
-	echo "ERROR: Driver no suportat [$DS_SISTRA_CLASS]"
-	exit 1
-    ;;
-esac
-echo "OK"
-
-echo -n "##### configurant zonaper amb "
-case $DS_ZONAPER_CLASS in
-    org.postgresql.xa.PGXADataSource)
-	echo -n "Postgresql: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <xa-datasource>
-    <jndi-name>es.caib.zonaper.db</jndi-name>
-    <track-connection-by-tx/>
-    <isSameRM-override-value>false</isSameRM-override-value>
-    <xa-datasource-class>org.postgresql.xa.PGXADataSource</xa-datasource-class>
-     <xa-datasource-property name="ServerName">$DS_ZONAPER_SERVER</xa-datasource-property>
-     <xa-datasource-property name="PortNumber">$DS_ZONAPER_PORT</xa-datasource-property>
-     <xa-datasource-property name="DatabaseName">$DS_ZONAPER_DATABASE</xa-datasource-property>
-    <xa-datasource-property name="User">$DS_ZONAPER_USER</xa-datasource-property>
-    <xa-datasource-property name="Password">$DS_ZONAPER_PASS</xa-datasource-property>
-    <no-tx-separate-pools/>
-      <metadata>
-         <type-mapping>$DS_ZONAPER_TYPEMAPPING</type-mapping>
-      </metadata>
-  </xa-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/zonaper-postgresql-ds.xml"
-    ;;
-    oracle.jdbc.xa.client.OracleXADataSource)
-	echo -n "Oracle: "
-	( cat << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<datasources>
-  <xa-datasource>
-    <jndi-name>es.caib.zonaper.db</jndi-name>
-    <track-connection-by-tx/>
-    <isSameRM-override-value>false</isSameRM-override-value>
-    <xa-datasource-class>oracle.jdbc.xa.client.OracleXADataSource</xa-datasource-class> 
-    <xa-datasource-property name="URL">$DS_ZONAPER_URL</xa-datasource-property>
-    <xa-datasource-property name="User">$DS_ZONAPER_USER</xa-datasource-property>
-    <xa-datasource-property name="Password">$DS_ZONAPER_PASS</xa-datasource-property>
-    <exception-sorter-class-name>org.jboss.resource.adapter.jdbc.vendor.OracleExceptionSorter</exception-sorter-class-name>
-    <no-tx-separate-pools/>
-      <metadata>
-         <type-mapping>$DS_ZONAPER_TYPEMAPPING</type-mapping>
-      </metadata>
-  </xa-datasource>
-</datasources>
-EOF
-	) > "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/zonaper-oracle-ds.xml"
-    ;;
-    *)
-	echo ""
-	echo "ERROR: Driver no suportat [$DS_ZONAPER_CLASS]"
-	exit 1
-    ;;
-esac
-echo "OK"
+exit 1
 
 pause
 
 }
-# conf_ds
 
 
 bin_ear(){
@@ -1380,13 +1199,16 @@ for i in "$@"; do
 	    f_conf
 	    precheck
 	    paquets
-	    instancia
 	    script_inici
 	    lib_extras
 	    # lib_caib
+	    instancia
 	    conf_jboss
 	    conf_properties
+	    conf_plugins
+	    conf_auth
 	    conf_ds
+	    echo "DEBUG - `date` - surt" ; exit 0
 	    bin_ear
 	    custom
 	    # ja no executam res més

@@ -29,6 +29,24 @@ echo "`date` - $0 - v$VER"
 # directori actual
 CDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# comprovam que s'estigui executant com a root"
+USCRIPT=`id -run`
+
+if [ "$USCRIPT" != "root" ]; then
+    echo "ERROR: aquest script està pensat per ser executat com a root."
+    echo "Haureu de modificar els valors per defecte del fitxer de configuració"
+    echo "perquè no apuntin a directoris on no teniu permís d'escriptura."
+    echo -n "Si estau segurs de voler continuar escriviu OK: "
+    read OK
+    if [ "$OK" == "ok" ] || [ "$OK" == "OK" ]; then
+	echo "Continuant amb usuari [$USCRIPT]..."
+    else
+	echo "Sortint..."
+	exit 1
+    fi
+fi
+
+
 # petita funció d'error"
 check_err(){
 if [ "$1" == "0" ]; then
@@ -193,7 +211,7 @@ SCRIPT_INICI="/etc/init.d/jboss-portafib-${ENTITAT}"
 
 # ears
 EAR_PORTAFIB="${DIR_PAQUETS}/portafib.ear"
-HTTP_EAR_PORTAFIB=""
+HTTP_EAR_PORTAFIB="https://github.com/GovernIB/portafib/releases/download/portafib-1.1.4_2018-03-12/portafib.ear"
 
 EOF
 	) >> "$FCONF"
@@ -1054,9 +1072,6 @@ EOF
 
 echo "OK"
 
-
-exit 1
-
 pause
 
 }
@@ -1064,59 +1079,20 @@ pause
 
 bin_ear(){
 # baixar/copiar les ear
-# DEMANAR SI SÓN OBLIGATORIS TOTS. ATURAR SI FALLA? CONTINUAR AMB UN AVÍS?
 
-echo -n "### copiant ear SISTRA: "
-if [ ! -e "$EAR_SISTRA" ]; then
-	if [ "$HTTP_EAR_SISTRA" == "" ]; then
-	    echo "ERROR: No s'ha trobat el paquet [$EAR_SISTRA]"
+echo -n "### copiant ear PORTAFIB: "
+if [ ! -e "$EAR_PORTAFIB" ]; then
+	if [ "$HTTP_EAR_PORTAFIB" == "" ]; then
+	    echo "ERROR: No s'ha trobat el paquet [$EAR_PORTAFIB]"
 	    exit 1
 	else
-	    echo "### baixant el paquet des de [$HTTP_EAR_SISTRA]"
-	    wget --no-check-certificate --no-cookies -nv -O "$EAR_SISTRA" "$HTTP_EAR_SISTRA"
+	    echo "### baixant el paquet des de [$HTTP_EAR_PORTAFIB]"
+	    wget --no-check-certificate --no-cookies -nv -O "$EAR_PORTAFIB" "$HTTP_EAR_PORTAFIB"
 	    check_err "$?"
 	fi
 fi
-cp -v "$EAR_SISTRA" "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/"
+cp -v "$EAR_PORTAFIB" "${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/"
 
-echo -n "### copiant ear CLIENTCERT: "
-if [ ! -e "$EAR_CLIENTCERT" ]; then
-	if [ "$HTTP_EAR_CLIENTCERT" == "" ]; then
-	    echo "ERROR: No s'ha trobat el paquet [$EAR_CLIENTCERT]"
-	    exit 1
-	else
-	    echo "### baixant el paquet des de [$HTTP_EAR_CLIENTCERT]"
-	    wget --no-check-certificate --no-cookies -nv -O "$EAR_CLIENTCERT" "$HTTP_EAR_CLIENTCERT"
-	    check_err "$?"
-	fi
-fi
-cp -v "$EAR_CLIENTCERT" "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/"
-
-echo -n "### copiant ear PLUGINMOCK: "
-if [ ! -e "$EAR_PLUGINMOCK" ]; then
-	if [ "$HTTP_EAR_PLUGINMOCK" == "" ]; then
-	    echo "ERROR: No s'ha trobat el paquet [$EAR_PLUGINMOCK]"
-	    exit 1
-	else
-	    echo "### baixant el paquet des de [$HTTP_EAR_PLUGINMOCK]"
-	    wget --no-check-certificate --no-cookies -nv -O "$EAR_PLUGINMOCK" "$HTTP_EAR_PLUGINMOCK"
-	    check_err "$?"
-	fi
-fi
-cp -v "$EAR_PLUGINMOCK" "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/"
-
-echo -n "### copiant ear SISTRACONSOLA: "
-if [ ! -e "$EAR_SISTRACONSOLA" ]; then
-	if [ "$HTTP_EAR_SISTRACONSOLA" == "" ]; then
-	    echo "ERROR: No s'ha trobat el paquet [$EAR_SISTRACONSOLA]"
-	    exit 1
-	else
-	    echo "### baixant el paquet des de [$HTTP_EAR_SISTRACONSOLA]"
-	    wget --no-check-certificate --no-cookies -nv -O "$EAR_SISTRACONSOLA" "$HTTP_EAR_SISTRACONSOLA"
-	    check_err "$?"
-	fi
-fi
-cp -v "$EAR_SISTRACONSOLA" "${DIR_BASE}/jboss/server/${INSTANCIA}/deploysistra/"
 pause
 
 }
@@ -1125,37 +1101,6 @@ custom(){
     # espai per personalitzar l'script
     VARIABLE="VALOR"
     # configuració LDAP
-#Configurar accés dels usuaris. Afegir al final del fitxer $JBOSS/server/default/conf/login-config.xml
-echo -n "### configurant autenticació ldap: "
-F_AUTH="${DIR_BASE}/jboss/server/${INSTANCIA}/conf/login-config.xml"
-grep "ldap.imasmallorca.net" "$F_AUTH"
-if [ "$?" != "0" ]; then
-    sed -i 's|^</policy>.*||' "$F_AUTH"
-(
-cat << EOF
-
-<application-policy name = "seycon">
-	<authentication>
-		<login-module code = "es.caib.mock.loginModule.MockCertificateLoginModule" flag = "sufficient">
-			<module-option name="roleTothom">tothom</module-option>
-		</login-module>
-		<login-module code = "es.caib.mock.loginModule.MockDatabaseLoginModule" flag = "sufficient">
-			<module-option name="unauthenticatedIdentity">nobody</module-option>
-			<module-option name = "dsJndiName">java:/es.caib.mock.loginModule.db</module-option>
-			<module-option name = "principalsQuery">SELECT USU_PASS,USU_NOM,USU_NIF FROM SC_WL_USUARI WHERE USU_CODI = ?</module-option>
-			<module-option name = "rolesQuery">SELECT UGR_CODGRU, 'Roles' FROM SC_WL_USUGRU WHERE UGR_CODUSU = ?</module-option>
-		</login-module>
-	</authentication>
-</application-policy>
-</policy>
-EOF
-) >> "$F_AUTH"
-fi
-echo "OK"
-
-
-
-    # baixar/copiar certificats
 
     # pujam la verbositat del log de seguritat
     sed -i 's|   <!-- Limit the org.apache category|\t<category name="org.jboss.security">\n\t\t<priority value="TRACE"/>\n\t</category>\n\n   <!-- Limit the org.apache category|' "${DIR_BASE}/jboss/server/${INSTANCIA}/conf/log4j.xml" 
@@ -1208,9 +1153,9 @@ for i in "$@"; do
 	    conf_plugins
 	    conf_auth
 	    conf_ds
-	    echo "DEBUG - `date` - surt" ; exit 0
+	    # echo "DEBUG - `date` - surt" ; exit 0
 	    bin_ear
-	    custom
+	    # custom
 	    # ja no executam res més
 	    echo "`date` - finalitzat"
 	    exit 0

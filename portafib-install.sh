@@ -788,7 +788,7 @@ F_PROPS="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-propertie
       es.caib.portafib.iscaib=$PORTAFIB_ISCAIB
 
       # Dialecte de Hibernate
-      es.caib.portafib.hibernate.dialect="$HIB_DIALECT"
+      es.caib.portafib.hibernate.dialect=$HIB_DIALECT
       # es.caib.portafib.hibernate.query.substitutions=true 1, false 0
 
       <!-- Directori on es guardaran tots els fitxers de PortaFIB-->
@@ -971,22 +971,24 @@ EOF
 
 	# sed -i "s;^JBOSS_HOME=.*;JBOSS_HOME=\"${DIR_BASE}/jboss\";" "$SCRIPT_INICI"
 
-	POLTEXT='    <!-- Directori BBDD per usuaris Persona -->
-    <application-policy name = "seycon">
-	<authentication>
-	    <login-module code="es.caib.portafib.back.security.BaseCertLoginModule"  flag = "sufficient">
-	    </login-module>
+	POLTEXT="    <!-- Directori BBDD per usuaris Persona -->
+    <application-policy name = \"seycon\">
 
-	    <login-module code="org.jboss.security.auth.spi.DatabaseServerLoginModule" flag="sufficient"> 
-		<module-option name="dsJndiName">java:/es.caib.seycon.db.wl</module-option>
-	        <module-option name="principalsQuery">
+	<authentication>
+	<!-- 2.3.5.- Autenticació i Autorització per Usuaris Persona
+	    <login-module code=\"es.caib.portafib.back.security.BaseCertLoginModule\"  flag = \"sufficient\">
+	    </login-module>
+	    -->
+	    <login-module code=\"org.jboss.security.auth.spi.DatabaseServerLoginModule\" flag=\"sufficient\"> 
+		<module-option name=\"dsJndiName\">java:/es.caib.seycon.db.wl</module-option>
+	        <module-option name=\"principalsQuery\">
 	    	    select USU_PASS from SC_WL_USUARI where USU_CODI = ?
         	</module-option>
-        	<module-option name="rolesQuery">
-		    select UGR_CODGRU, "Roles" from SC_WL_USUGRU where UGR_CODUSU = ?
+        	<module-option name=\"rolesQuery\">
+		    select UGR_CODGRU, 'Roles' from SC_WL_USUGRU where UGR_CODUSU = ?
         	</module-option>
 	    </login-module>
-'
+"
 
     ;;
     ldap)
@@ -1053,6 +1055,29 @@ fi
 }
 
 conf_ds(){
+
+echo -n "### Comprovant accés a la bbdd: "
+# jdbc:postgresql://localhost:5432/portafib
+CHECK_URI=`echo "${DS_PORTAFIB_URL//jdbc:/}"`
+PGUSER="$DS_PORTAFIB_USER"
+PGPASSWORD="$DS_PORTAFIB_PASS"
+# el psql necessita les variables exportades explícitament
+export PGUSER PGPASSWORD
+psql -d "$CHECK_URI" -A -t -c "select count(*) from pfi_role"
+if [ "$?" != "0" ]; then
+    echo "ERROR: problemes en connectar a la BBDD"
+    echo "Estau segurs que voleu continuar? s/n: "
+    read BBDDOK
+    if [ "$BBDDOK" == "s" ] || [ "$OK" == "S" ]; then
+	echo "Continuant sense comprovació de la bbdd..."
+    else
+	echo "Comprova la connexió a la bbdd i torna a executar l'script"
+	echo "Sortint..."
+	exit 1
+    fi
+fi
+
+
 echo -n "### Creant DS portafib per usuaris de la aplicació: "
 
 # 2.5.- DataSources

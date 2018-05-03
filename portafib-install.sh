@@ -950,7 +950,24 @@ else
 case $AUTH_PERSONA in
     bbdd)
 	echo -n "### Comprovant accés a la bbdd d'usuaris persona"
-
+	CHECK_URI=`echo "${AUTH_PERSONA_DS_URL//jdbc:/}"`
+	PGUSER="$AUTH_PERSONA_DS_USER"
+	PGPASSWORD="$AUTH_PERSONA_DS_PASS"
+	# el psql necessita les variables exportades explícitament
+	export PGUSER PGPASSWORD
+	psql -d "$CHECK_URI" -A -t -c "select count(*) from sc_wl_usuari"
+	if [ "$?" != "0" ]; then
+	    echo "ERROR: problemes en connectar a la BBDD"
+	    echo "Estau segurs que voleu continuar? s/n: "
+	    read BBDDOK
+	    if [ "$BBDDOK" == "s" ] || [ "$OK" == "S" ]; then
+		echo "Continuant sense comprovació de la bbdd..."
+	    else
+		echo "Comprova la connexió a la bbdd i torna a executar l'script"
+	        echo "Sortint..."
+		exit 1
+    	    fi
+	fi
 
 	echo -n "### Creant DS per autenticació Persona: "
 	# 2.3.5.- Autenticació i Autorització per Usuaris Persona

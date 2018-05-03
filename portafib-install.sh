@@ -16,7 +16,7 @@
 # àngel "mussol" bosch - 2018
 #
 
-VER="0.2"
+VER="0.3"
 
 # cream un log amb la sortida de tot l'script (dona problemes amb
 # els retorns de carro en cas d'esperar entrada per STDIN)
@@ -1138,7 +1138,7 @@ pause
 
 help(){
     # 
-    echo "Instal·lador Sistra"
+    echo "Instal·lador Portafib"
     echo "Aquest instal·lador respecta els fitxers de configuració FORA del"
     echo "directori arrel del JBoss/Java. És a dir, els fitxers de propeties"
     echo "i la configuració del propi script"
@@ -1246,25 +1246,3 @@ done
 echo "`date` - finalitzat"
 exit 0
 
-#####################################################################
-#####################################################################
-########################### REPASSAR!!!! ############################
-#####################################################################
-# vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv #
-
-#Copia de binaris
-echo -n "	# Copiant Binaris: " 
-# PENDENT DE CONFIRMACIÓ
-cp -v "$MOCK_JAR"   "${DIR_BASE}/jboss/server/${INSTANCIA}/lib/"
-
-
-# PENDENT DE CONFIRMACIÓ
-# la part de certificats la deix deshabilitada per ara
-conf_certs(){
-echo -n "### creant : "
-
-cp  "$CLIENTECERT_PROPIETATS" -r "${DIR_BASE}/config_sistra/sistra/"
-
-echo "OK"
-}
-# conf_certs

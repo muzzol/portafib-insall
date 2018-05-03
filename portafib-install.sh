@@ -949,6 +949,9 @@ else
 
 case $AUTH_PERSONA in
     bbdd)
+	echo -n "### Comprovant accés a la bbdd d'usuaris persona"
+
+
 	echo -n "### Creant DS per autenticació Persona: "
 	# 2.3.5.- Autenticació i Autorització per Usuaris Persona
 

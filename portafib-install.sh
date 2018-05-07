@@ -773,7 +773,7 @@ case $PORTAFIB_PLUGIN_INFOUSER in
       es.caib.portafib.plugins.userinformation.ldap.search_filter=$PLUGIN_USERINFOLDAP_FILTER
       es.caib.portafib.plugins.userinformation.ldap.attribute.username=$PLUGIN_USERINFOLDAP_ATTR_USERNAME
       es.caib.portafib.plugins.userinformation.ldap.attribute.mail=mail
-      es.caib.portafib.plugins.userinformation.ldap.attribute.administration_id=postOfficeBox
+      es.caib.portafib.plugins.userinformation.ldap.attribute.administration_id=employeeNumber
       es.caib.portafib.plugins.userinformation.ldap.attribute.name=$PLUGIN_USERINFOLDAP_ATTR_NAME
       # Has de triar:
       #       - surname1 i surname2
@@ -1074,7 +1074,7 @@ EOF
 	    <module-option name=\"ldap.suffix_role_match_memberof\">$PLUGIN_USERINFOLDAP_SUFIX_MEMBEROF</module-option>
 	    <module-option name=\"ldap.attribute.username\">$PLUGIN_USERINFOLDAP_ATTR_USERNAME</module-option>
 	    <module-option name=\"ldap.attribute.mail\">mail</module-option>
-	    <module-option name=\"ldap.attribute.administration_id\">postOfficeBox</module-option>
+	    <module-option name=\"ldap.attribute.administration_id\">employeeNumber</module-option>
 	    <module-option name=\"ldap.attribute.name\">$PLUGIN_USERINFOLDAP_ATTR_NAME</module-option>
 	    <module-option name=\"ldap.attribute.surname\">$PLUGIN_USERINFOLDAP_ATTR_SURNAME</module-option>
 	    <module-option name=\"ldap.attribute.telephone\">telephoneNumber</module-option>

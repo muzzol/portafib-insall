@@ -134,7 +134,7 @@ PORTAFIB_PLUGIN_INFOUSER="ldap"
 # LDAP per la informació del l'usuari (s'ignoren aquestes dades en cas
 # d'utilitzar un altre plugin a la variable PORTAFIB_INFOUSER)
 PLUGIN_USERINFOLDAP_HOST="ldap://ldap.ticmallorca.net:389"
-PLUGIN_USERINFOLDAP_PRINCIPAL="u99999"
+PLUGIN_USERINFOLDAP_PRINCIPAL="uid=app002,ou=users,dc=consorci,dc=global"
 PLUGIN_USERINFOLDAP_CREDENTIALS="SuPerPa44"
 PLUGIN_USERINFOLDAP_USERSDN="ou=users,dc=consorci,dc=global"
 PLUGIN_USERINFOLDAP_FILTER="(|(memberof=cn=rol-app3,ou=rols,ou=groups,dc=consorci,dc=global)(memberof=cn=RSC_OPER,ou=rolsac,ou=rols,ou=groups,dc=consorci,dc=global))"
@@ -209,9 +209,18 @@ HTTP_PAQUET_CXF="http://download.jboss.org/jbossws/jbossws-cxf-3.4.0.GA.zip"
 # altres fitxers
 SCRIPT_INICI="/etc/init.d/jboss-portafib-${ENTITAT}"
 
+# biblioteca LDAP login
+LDAPLOGIN_JAR="${DIR_PAQUETS}/loginmodule-jboss-ldap-1.0.0.jar"
+HTTP_LDAPLOGIN_JAR="https://github.com/GovernIB/maven/raw/gh-pages/maven/org/fundaciobit/plugins/loginmodule-jboss-ldap/1.0.0/loginmodule-jboss-ldap-1.0.0.jar"
+
+# biblioteca utils LDAP
+LDAPUTILS_JAR="${DIR_PAQUETS}/plugins-utils-ldap-1.0.0.jar"
+HTTP_LDAPUTILS_JAR="https://github.com/GovernIB/maven/raw/gh-pages/maven/org/fundaciobit/plugins/plugins-utils-ldap/1.0.0/plugins-utils-ldap-1.0.0.jar"
+
 # ears
 EAR_PORTAFIB="${DIR_PAQUETS}/portafib.ear"
 HTTP_EAR_PORTAFIB="https://github.com/GovernIB/portafib/releases/download/portafib-1.1.4_2018-03-12/portafib.ear"
+
 
 EOF
 	) >> "$FCONF"
@@ -716,6 +725,41 @@ echo -n "### creant fitxer de propietats: "
 
 case $PORTAFIB_PLUGIN_INFOUSER in
     ldap|org.fundaciobit.plugins.userinformation.ldap.LdapUserInformationPlugin)
+	echo ""
+	# POSTGRESQL: si la variable està definida asumim que se vol utilitzar
+	if [ "$LDAPLOGIN_JAR" != "" ]; then
+	    echo -n "##### baixant jar per autenticació LDAP"
+	    if [ ! -e "$LDAPLOGIN_JAR" ]; then
+		if [ "$HTTP_LDAPLOGIN_JAR" == "" ]; then
+	    	    echo "ERROR: No s'ha trobat el paquet [$LDAPLOGIN_JAR]"
+		    exit 1
+		else
+		    echo "### baixant el paquet des de [$HTTP_LDAPLOGIN_JAR]"
+		    wget --no-check-certificate --no-cookies -nv -O "$LDAPLOGIN_JAR" "$HTTP_LDAPLOGIN_JAR"
+		    check_err "$?"
+		fi
+	    fi
+	    cp -vf "$LDAPLOGIN_JAR" "${DIR_BASE}/jboss/common/lib/"
+	fi
+	echo "OK"
+
+	if [ "$LDAPUTILS_JAR" != "" ]; then
+	    echo -n "##### baixant plugin utils per autenticació LDAP"
+	    if [ ! -e "$LDAPUTILS_JAR" ]; then
+		if [ "$HTTP_LDAPUTILS_JAR" == "" ]; then
+	    	    echo "ERROR: No s'ha trobat el paquet [$LDAPUTILS_JAR]"
+		    exit 1
+		else
+		    echo "### baixant el paquet des de [$HTTP_LDAPUTILS_JAR]"
+		    wget --no-check-certificate --no-cookies -nv -O "$LDAPUTILS_JAR" "$HTTP_LDAPUTILS_JAR"
+		    check_err "$?"
+		fi
+	    fi
+	    cp -vf "$LDAPUTILS_JAR" "${DIR_BASE}/jboss/common/lib/"
+	fi
+	echo "OK"
+
+
 	# plugin ldap info user
 	PLUGIN_INFO_LDAP="
       <!-- ======== PLUGIN USER-INFORMATION - LDAP ======= -->
@@ -1035,7 +1079,10 @@ EOF
 	    <module-option name=\"ldap.attribute.surname\">$PLUGIN_USERINFOLDAP_ATTR_SURNAME</module-option>
 	    <module-option name=\"ldap.attribute.telephone\">telephoneNumber</module-option>
 	    <module-option name=\"ldap.attribute.memberof\">$PLUGIN_USERINFOLDAP_ATTR_MEMBEROF</module-option>
+	    <module-option name=\"ldap.attribute.surname1\">$PLUGIN_USERINFOLDAP_ATTR_SURNAME</module-option>
+	    <module-option name=\"ldap.attribute.surname2\">$PLUGIN_USERINFOLDAP_ATTR_SURNAME</module-option>
 	  </login-module>
+
 "
     ;;
     *)
@@ -1144,11 +1191,11 @@ pause
 
 custom(){
     # espai per personalitzar l'script
-    VARIABLE="VALOR"
+    VARIABLE="1"
     # configuració LDAP
 
     # pujam la verbositat del log de seguritat
-    sed -i 's|   <!-- Limit the org.apache category|\t<category name="org.jboss.security">\n\t\t<priority value="TRACE"/>\n\t</category>\n\n   <!-- Limit the org.apache category|' "${DIR_BASE}/jboss/server/${INSTANCIA}/conf/log4j.xml" 
+    sed -i 's|   <!-- Limit the org.apache category|\t<category name="org.jboss.security">\n\t\t<priority value="TRACE"/>\n\t</category>\n\n   <!-- Limit the org.apache category|' "${DIR_BASE}/jboss/server/${INSTANCIA}/conf/jboss-log4j.xml"
 
 pause
 
@@ -1200,7 +1247,7 @@ for i in "$@"; do
 	    conf_ds
 	    # echo "DEBUG - `date` - surt" ; exit 0
 	    bin_ear
-	    # custom
+	    custom
 	    # ja no executam res més
 	    echo "`date` - finalitzat"
 	    exit 0

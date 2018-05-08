@@ -395,6 +395,23 @@ ln -vs "${DIR_JBOSS}" "jboss"
 # donam execució a run.sh
 chmod +x "${DIR_BASE}/jboss/bin/run.sh"
 
+# canviam l'index.html per defecte (això no és cap mesura de seguretat
+# tan sols és per simplificar l'accés a l'aplicació)
+mv "${DIR_BASE}/jboss/server/default/deploy/ROOT.war/index.html" "${DIR_BASE}/jboss/server/default/deploy/ROOT.war/index.html.orig"
+echo '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <title>PortaFIB</title>
+<META HTTP-EQUIV="Refresh" CONTENT="1; URL=/portafib/">
+
+  </head>
+  <body>
+
+    <p style="text-align:center">PortaFIB</p>
+
+</body>
+</html>
+' > "${DIR_BASE}/jboss/server/default/deploy/ROOT.war/index.html"
 
 # feim propietari a l'usuari especificat
 chown -R "$USUARI" "$DIR_BASE"

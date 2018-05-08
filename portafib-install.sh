@@ -69,17 +69,11 @@ if [ "$PAUSE" != "0" ]; then
 fi
 }
 
-# fitxer de configuració d'aquest mateix script
-# cercam el fitxer de propietats al mateix directori on hi ha el script
-# i si no existeix el cream
-f_conf(){
-    F="$(basename $0)"
-    FCONF="${CDIR}/${F%.*}.conf"
-    # echo "### comprovant fitxer de configuració [$FCONF]"
-    if [ ! -e "$FCONF" ]; then
-	echo "No s'ha trobat el fitxer de configuració"
-	echo "S'ha creat el fitxer [$FCONF]"
-	( cat << 'EOF'
+# crea una plantilla de configuració amb valors per defecte
+f_template(){
+    FTEMPLATE="$1"
+    echo "### Creant la plantilla [$FTEMPLATE]"
+    ( cat << 'EOF'
 
 ####
 #### VARIABLES GENERALS
@@ -223,19 +217,27 @@ HTTP_EAR_PORTAFIB="https://github.com/GovernIB/portafib/releases/download/portaf
 
 
 EOF
-	) >> "$FCONF"
+	) >> "$FTEMPLATE"
+
+    pause
+}
+
+
+# fitxer de configuració d'aquest mateix script
+# cercam el fitxer de propietats al mateix directori on hi ha el script
+# i si no existeix el cream
+f_conf(){
+    F="$(basename $0)"
+    FCONF="${CDIR}/${F%.*}.conf"
+    # echo "### comprovant fitxer de configuració [$FCONF]"
+    if [ ! -e "$FCONF" ]; then
+	echo "No s'ha trobat el fitxer de configuració"
+	f_template "$FCONF"
 	exit 1
     fi
 
     # llegim el fitxer de configuració
     . "$FCONF"
-
-    # comprovam que s'hagi configurat mínimament
-    if [ "$ENTITAT" == "" ]; then
-	echo "ERROR: configuració errònia. Revisa el fitxer [$FCONF]"
-	exit 1
-    fi
-
 
     # comprovam que existeixin les variables necessàries al fitxer conf
     # en cas contrari probablement tenim un conf antic.
@@ -262,20 +264,28 @@ LDAPLOGIN_JAR HTTP_LDAPLOGIN_JAR LDAPUTILS_JAR HTTP_LDAPUTILS_JAR
 	if [ "$?" != "0" ]; then
 	    echo "ERROR: No s'ha trobat l'atribut [$c] a la configuració."
 	    echo "Probablement el fitxer [$FCONF] s'ha creat amb una versió antiga de l'script."
+	    echo "Utilitzeu la plantilla següent per comprovar els canvis."
+	    f_template "${FCONF}.template"
 	    exit 1
 	fi
     done
 
+    # comprovam que s'hagi configurat mínimament
+    if [ "$ENTITAT" == "" ]; then
+	echo "ERROR: configuració errònia. Revisa el fitxer [$FCONF]"
+	exit 1
+    fi
 
-#    pause
+    pause
 }
-# f_conf
+
 
 # comprovacions vàries
 precheck(){
 echo -n "### comprovacions de sistema: "
 if ! id $USUARI > /dev/null ; then
     echo "ERROR: No s'ha trobat l'usuari $USUARI"
+    echo "Comproveu la configuració al fitxer [$FCONF]"
     exit 1
 fi
 

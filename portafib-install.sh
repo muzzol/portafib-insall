@@ -1048,18 +1048,19 @@ conf_auth(){
 # comprovam que s'hagi configurat ja el login-config.xml
 grep -q '<application-policy name = "seycon">' "${DIR_BASE}/jboss/server/${INSTANCIA}/conf/login-config.xml"
 if [ "$?" == "0" ]; then
-    echo "### ja s'ha configurat login-config.xml "
+    echo "### ja s'ha configurat [${DIR_BASE}/jboss/server/${INSTANCIA}/conf/login-config.xml] "
 else
 
 case $AUTH_PERSONA in
     bbdd)
-	echo -n "### Comprovant accés a la bbdd d'usuaris persona"
+	echo -n "### Comprovant accés a la bbdd d'usuaris persona: "
 	CHECK_URI=`echo "${AUTH_PERSONA_DS_URL//jdbc:/}"`
 	PGUSER="$AUTH_PERSONA_DS_USER"
 	PGPASSWORD="$AUTH_PERSONA_DS_PASS"
 	# el psql necessita les variables exportades explícitament
 	export PGUSER PGPASSWORD
-	psql -d "$CHECK_URI" -A -t -c "select count(*) from sc_wl_usuari"
+	# psql -d "$CHECK_URI" -A -t -c "select count(*) from sc_wl_usuari"
+	psql -d "$CHECK_URI" -A -t -c "select * from sc_wl_usugru where ugr_codgru='PFI_ADMIN'" | grep -m1 "PFI_ADMIN"
 	if [ "$?" != "0" ]; then
 	    echo "ERROR: problemes en connectar a la BBDD"
 	    echo "Estau segurs que voleu continuar? s/n: "
@@ -1363,6 +1364,11 @@ for i in "$@"; do
 	    f_conf
 	    precheck
 	    bin_ear
+	;;
+	-t)
+	    f_conf
+	    precheck
+	    conf_auth
 	;;
 	*)
 	    help

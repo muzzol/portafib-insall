@@ -114,7 +114,8 @@ HIB_DIALECT="org.hibernate.dialect.PostgreSQLDialect"
 # Directori on es guardaran tots els fitxers de PortaFIB-->
 PORTAFIB_FILES="/opt/portafibfiles"
 
-# Clau per encriptar l'identificador del fitxers a descarregar via web (IMPORTANT tamany de 16 caràcters)
+# Clau per encriptar l'identificador del fitxers a descarregar via web (IMPORTANT la 
+# mida ha de ser de 16 caràcters)
 PORTAFIB_ENCRYPTKEY="abcdefgh12345678"
 
 # plugin d'informació de l'usuari (es.caib.portafib.userinformationplugin). pot ser
@@ -902,7 +903,7 @@ F_PROPS="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-propertie
       es.caib.portafib.development=false
 
       <!-- Clau per encriptar l'identificador del fitxers a descarregar via web'(IMPORTANT tamany de 16 caràcters) -->
-      es.caib.portafib.encryptkey="$PORTAFIB_ENCRYPTKEY"
+      es.caib.portafib.encryptkey=$PORTAFIB_ENCRYPTKEY
 
       <!-- Llistat de Plugins per l'exportació de dades en els llistats (excel, ods, csv, ...)' -->
       es.caib.portafib.exportdataplugins=org.fundaciobit.plugins.exportdata.cvs.CSVPlugin,org.fundaciobit.plugins.exportdata.ods.ODSPlugin,org.fundaciobit.plugins.exportdata.excel.ExcelPlugin

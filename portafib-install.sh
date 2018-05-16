@@ -902,7 +902,7 @@ F_PROPS="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-propertie
 
       es.caib.portafib.development=false
 
-      <!-- Clau per encriptar l'identificador del fitxers a descarregar via web'(IMPORTANT tamany de 16 caràcters) -->
+      <!-- Clau per encriptar l'identificador del fitxers a descarregar via web'(IMPORTANT tamany de 16 caràcters i no ha de dur cometes) -->
       es.caib.portafib.encryptkey=$PORTAFIB_ENCRYPTKEY
 
       <!-- Llistat de Plugins per l'exportació de dades en els llistats (excel, ods, csv, ...)' -->

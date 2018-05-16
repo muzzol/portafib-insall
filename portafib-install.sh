@@ -1253,10 +1253,9 @@ pause
 custom(){
     # espai per personalitzar l'script
     VARIABLE="1"
-    # configuració LDAP
 
     # pujam la verbositat del log de seguritat
-    sed -i 's|   <!-- Limit the org.apache category|\t<category name="org.jboss.security">\n\t\t<priority value="TRACE"/>\n\t</category>\n\n   <!-- Limit the org.apache category|' "${DIR_BASE}/jboss/server/${INSTANCIA}/conf/jboss-log4j.xml"
+    # sed -i 's|   <!-- Limit the org.apache category|\t<category name="org.jboss.security">\n\t\t<priority value="TRACE"/>\n\t</category>\n\n   <!-- Limit the org.apache category|' "${DIR_BASE}/jboss/server/${INSTANCIA}/conf/jboss-log4j.xml"
 
 pause
 

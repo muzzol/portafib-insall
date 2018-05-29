@@ -896,7 +896,7 @@ F_PROPS="${DIR_BASE}/jboss/server/${INSTANCIA}/deployportafib/portafib-propertie
       # es.caib.portafib.hibernate.query.substitutions=true 1, false 0
 
       <!-- Directori on es guardaran tots els fitxers de PortaFIB-->
-      es.caib.portafib.filesdirectory="$PORTAFIB_FILES"
+      es.caib.portafib.filesdirectory=$PORTAFIB_FILES
 
       es.caib.portafib.defaultlanguage=ca
 
